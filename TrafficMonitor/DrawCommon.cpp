@@ -28,14 +28,20 @@ void CDrawCommon::SetDC(CDC * pDC)
 	m_pDC = pDC;
 }
 
-void CDrawCommon::DrawWindowText(CRect rect, LPCTSTR lpszString, COLORREF color, Alignment align, bool draw_back_ground)
+void CDrawCommon::DrawWindowText(CRect rect, LPCTSTR lpszString, COLORREF color, Alignment align, bool draw_back_ground, bool multi_line)
 {
 	m_pDC->SetTextColor(color);
 	if(!draw_back_ground)
 		m_pDC->SetBkMode(TRANSPARENT);
 	m_pDC->SelectObject(m_pfont);
 	CSize text_size = m_pDC->GetTextExtent(lpszString);
-	UINT format{ DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX };		//CDC::DrawText()函数的文本格式
+
+	UINT format;		//CDC::DrawText()函数的文本格式
+	if (multi_line)
+		format = DT_EDITCONTROL | DT_WORDBREAK | DT_NOPREFIX;
+	else
+		format = DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX;
+
 	if (text_size.cx > rect.Width())		//如果文本宽度超过了矩形区域的宽度，设置了居中时左对齐
 	{
 		if (align == Alignment::RIGHT)
@@ -60,6 +66,13 @@ void CDrawCommon::SetDrawRect(CRect rect)
 	CRgn rgn;
 	rgn.CreateRectRgnIndirect(rect);
 	m_pDC->SelectClipRgn(&rgn);
+}
+
+void CDrawCommon::SetDrawRect(CDC * pDC, CRect rect)
+{
+	CRgn rgn;
+	rgn.CreateRectRgnIndirect(rect);
+	pDC->SelectClipRgn(&rgn);
 }
 
 void CDrawCommon::DrawBitmap(CBitmap & bitmap, CPoint start_point, CSize size, StretchMode stretch_mode)
@@ -238,4 +251,17 @@ void CDrawCommon::GetRegionFromImage(CRgn& rgn, CBitmap &cBitmap, int threshold)
 int CDrawCommon::GetColorBritness(COLORREF color)
 {
 	return (GetRValue(color) + GetGValue(color) + GetBValue(color)) / 3;
+}
+
+void CDrawCommon::DrawLine(CPoint start_point, int height, COLORREF color)
+{
+	CPen aPen, *pOldPen;
+	aPen.CreatePen( PS_SOLID, 1, color);
+	pOldPen = m_pDC->SelectObject(&aPen);
+	CBrush* pOldBrush{ dynamic_cast<CBrush*>(m_pDC->SelectStockObject(NULL_BRUSH)) };
+
+	m_pDC->MoveTo(start_point); //移动到起始点，默认是从下向上画
+	m_pDC->LineTo(CPoint(start_point.x,start_point.y - height));
+	m_pDC->SelectObject(pOldPen);
+	m_pDC->SelectObject(pOldBrush);       // Restore the old brush
 }

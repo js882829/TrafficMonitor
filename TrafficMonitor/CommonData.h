@@ -5,10 +5,18 @@
 //储存某一天的历史流量
 struct HistoryTraffic
 {
-	int year;
-	int month;
-	int day;
-	unsigned int kBytes;	//当天使用的流量（以KB为单位）
+	int year{};
+	int month{};
+	int day{};
+	//unsigned int kBytes;	//当天使用的流量（以KB为单位）
+	unsigned __int64 up_kBytes{};
+	unsigned __int64 down_kBytes{};
+	bool mixed{ true };		//如果不区分上传和下载流量，则为true
+
+	unsigned __int64 kBytes() const
+	{
+		return up_kBytes + down_kBytes;
+	}
 
 	//比较两个HistoryTraffic对象的日期，如果a的时间大于b，则返回true
 	static bool DateGreater(const HistoryTraffic& a, const HistoryTraffic& b)
@@ -35,6 +43,7 @@ struct HistoryTraffic
 #define TRAFFIC_COLOR_GREEN RGB(128, 194, 105)
 #define TRAFFIC_COLOR_YELLOE RGB(255, 216, 58)
 #define TRAFFIC_COLOR_RED RGB(255, 95, 74)
+#define TRAFFIC_COLOR_DARK_RED RGB(166, 19, 0)
 
 //网速单位
 enum class SpeedUnit
@@ -44,29 +53,58 @@ enum class SpeedUnit
 	MBPS		//MB/s
 };
 
+
+//显示的项目
+enum DisplayItem
+{
+	TDI_UP = 1 << 0,
+	TDI_DOWN = 1 << 1,
+	TDI_CPU = 1 << 2,
+	TDI_MEMORY = 1 << 3,
+    TDI_CPU_TEMP = 1 << 4,
+    TDI_GPU_TEMP = 1 << 5,
+    TDI_HDD_TEMP = 1 << 6,
+    TDI_MAIN_BOARD_TEMP = 1 << 7
+};
+
 #define DEF_CH L'\"'		//写入和读取ini文件字符串时，在字符串前后添加的字符
 #define NONE_STR L"@@@"		//用于指定一个无效字符串
 struct DispStrings		//显示的文本
 {
-	wstring up;
-	wstring down;
-	wstring cpu;
-	wstring memory;
+private:
+    std::map<DisplayItem, wstring> map_str;
+
+public:
+    //获取一个显示的文本
+    wstring& Get(DisplayItem item)
+    {
+        return map_str[item];
+    }
+
+    const std::map<DisplayItem, wstring>& GetAllItems() const
+    {
+        return map_str;
+    }
+
 	void operator=(const DispStrings& disp_str)		//重载赋值运算符
 	{
+        map_str = disp_str.map_str;
 		//如果赋值的字符串是定义的无效字符串，则不赋值
-		if (disp_str.up != NONE_STR)
-			up = disp_str.up;
-		if (disp_str.down != NONE_STR)
-			down = disp_str.down;
-		if (disp_str.cpu != NONE_STR)
-			cpu = disp_str.cpu;
-		if (disp_str.memory != NONE_STR)
-			memory = disp_str.memory;
-	}
+        for (auto& iter = map_str.begin(); iter != map_str.end(); ++iter)
+        {
+            if (iter->second == NONE_STR)
+                iter->second.clear();
+        }
+    }
+
 	bool IsInvalid() const
 	{
-		return (up == NONE_STR && down == NONE_STR && cpu == NONE_STR && memory == NONE_STR);
+        for (auto& iter = map_str.begin(); iter != map_str.end(); ++iter)
+        {
+            if (iter->second == NONE_STR)
+                return false;
+        }
+        return true;
 	}
 };
 
@@ -78,6 +116,7 @@ enum class DoubleClickAction
 	SHOW_MORE_INFO,		//显示更多信息
 	OPTIONS,			//选项设置
 	TASK_MANAGER,		//任务管理器
+    SEPCIFIC_APP,       //指定应用程序
 	CHANGE_SKIN,		//更换皮肤
 	NONE				//不执行任何动作
 };
@@ -87,7 +126,15 @@ enum class Language
 {
 	FOLLOWING_SYSTEM,		//跟随系统
 	ENGLISH,				//英语
-	SIMPLIFIED_CHINESE		//简体中文
+	SIMPLIFIED_CHINESE,		//简体中文
+	TRADITIONAL_CHINESE		//繁体中文
+};
+
+//颜色模式
+enum class ColorMode
+{
+	Default, //默认颜色
+	Light	//浅色
 };
 
 //字体
@@ -101,51 +148,106 @@ struct FontInfo
 	bool strike_out;	//删除线
 };
 
-//将字号转成成LOGFONT结构中的lfHeight
+//将字号转成LOGFONT结构中的lfHeight
 #define FONTSIZE_TO_LFHEIGHT(font_size) (-MulDiv(font_size, GetDeviceCaps(::GetDC(HWND_DESKTOP), LOGPIXELSY), 72))
 
-//选项设置数据
-#define MAIN_WND_COLOR_NUM 4		//主窗口颜色数量
-struct MainWndSettingData
+//历史流量统计列表视图中显示模式
+enum class HistoryTrafficViewType
 {
-	//主窗口
-	COLORREF text_colors[MAIN_WND_COLOR_NUM]{};		//文字颜色（分别为“上传”、“下载”、“CPU”、“内存”的颜色）
+    HV_DAY,         //日视图
+    HV_MONTH,          //月视图
+    HV_QUARTER,     //季视图
+    HV_YEAR            //年视图
+};
+
+//选项设置数据
+struct MainConfigData
+{
+	bool m_always_on_top{ false };		//窗口置顶
+	int m_transparency{ 100 };			//窗口透明度
+	bool m_lock_window_pos{ false };	//锁定窗口位置
+	bool m_show_more_info{ false };		//显示更多信息
+	bool m_mouse_penetrate{ false };	//鼠标穿透
+	bool m_show_task_bar_wnd{ false };	//显示任务栏窗口
+	bool m_hide_main_window;			//隐藏主窗口
+	bool m_show_notify_icon{ true };	//显示通知区域图标
+	//bool m_tbar_show_cpu_memory;		//任务栏窗口显示CPU和内存利用率
+	unsigned int m_tbar_display_item{ TDI_UP | TDI_DOWN };		//任务栏窗口显示的项目
+
+	int m_position_x;	//窗口位置的x坐标
+	int m_position_y;	//窗口位置的y坐标
+
+	bool m_auto_select{ false };	//自动选择连接
+	bool m_select_all{ false };		//统计所有连接的网速
+	string m_connection_name;		//当前选择网络的名称
+
+	wstring m_skin_name;			//选择的皮肤的名称
+	int m_dft_notify_icon = 0;		//默认的通知图标(用于区分win10的深色和浅色模式)
+	int m_notify_icon_selected{};	//要显示的通知区图标
+    bool m_notify_icon_auto_adapt{ false }; //通知区图标是否自动适应Win10深浅色模式
+	bool m_alow_out_of_border{ false };		//是否允许悬浮窗超出屏幕边界
+
+	//bool m_show_internet_ip{ false };		//是否在“连接详情”对话框中显示外网IP地址
+	bool m_use_log_scale{ false };			//“历史流量统计”对话框中绘制表示历史流量数值的矩形时是否使用对数比例
+    HistoryTrafficViewType m_view_type{};
+	bool m_sunday_first{ true };			//是否将周日作为一周的第一天
+};
+
+//选项设置中“主窗口设置”和“任务栏窗口设置”中公共的数据（不使用此结构体创建对象）
+struct PublicSettingData
+{
 	bool specify_each_item_color{ false };		//是否指定每个项目的颜色
 	FontInfo font;			//字体
 	DispStrings disp_str;	//显示的文本
-	bool speed_short_mode{ false };		//网速显示简洁模式（减少小数点的位数，单位不显示“B”）
 	bool swap_up_down{ false };		//交换上传和下载显示的位置
-	bool hide_main_wnd_when_fullscreen;		//有程序全屏运行时隐藏悬浮窗
+	bool speed_short_mode{ false };		//网速显示简洁模式（减少小数点的位数，单位不显示“B”）
+	bool separate_value_unit_with_space{ true };	//网速数值和单位用空格分隔
+    bool show_tool_tip{ true };         //显示鼠标提示
+	bool unit_byte{ true };				//使用字节(B)而不是比特(b)为单位
 	SpeedUnit speed_unit;		//网速的单位
 	bool hide_unit;			//隐藏单位
 	bool hide_percent;		//隐藏百分号
 	DoubleClickAction double_click_action;		//鼠标双击动作
+	wstring double_click_exe;	//鼠标双击动作为打开指定应用程序时，打开的程序路径
 };
 
-#define TASKBAR_COLOR_NUM 8		//任务栏窗口颜色数量
-struct TaskBarSettingData
+#define MAIN_WND_COLOR_NUM 4		//主窗口颜色数量
+//选项设置中“主窗口设置”的数据
+struct MainWndSettingData : public PublicSettingData
 {
-	//任务栏窗口
+	COLORREF text_colors[MAIN_WND_COLOR_NUM]{};		//文字颜色（分别为“上传”、“下载”、“CPU”、“内存”的颜色）
+	bool hide_main_wnd_when_fullscreen;		//有程序全屏运行时隐藏悬浮窗
+};
+
+#define TASKBAR_COLOR_NUM 16		//任务栏窗口颜色数量
+//选项设置中“任务栏窗口设置”的数据
+struct TaskBarSettingData : public PublicSettingData
+{
 	COLORREF  back_color{ RGB(0, 0, 0) };	//背景颜色
+	COLORREF transparent_color{ RGB(0, 0, 0) };		//透明色
+	COLORREF status_bar_color{ RGB(0, 0, 0) };		// CPU/内存 状态条颜色
 	COLORREF text_colors[TASKBAR_COLOR_NUM]{};		//文字颜色（依次为“上传”、“下载”、“CPU”、“内存”的标签和数据颜色）
-	bool specify_each_item_color{ false };		//是否指定每个项目的颜色
-	FontInfo font;			//字体
-	DispStrings disp_str;	//显示的文本
-	bool swap_up_down{ false };		//交换上传和下载显示的位置
-	bool speed_short_mode{ false };		//网速显示简洁模式（减少小数点的位数，单位不显示“B”）
+	int dft_back_color = 0;							//默认背景颜色
+	int dft_transparent_color = 0;					//默认透明色
+	int dft_status_bar_color = 0x005A5A5A;			//默认CPU/内存 状态条颜色
+	int dft_text_colors = 0x00ffffffU;				//默认文字颜色
+
+	bool auto_adapt_light_theme{ true };			//是否自动适应浅色主题
+	int dark_default_style{ 0 };					//深色主题时使用的预设方案
+	int light_default_style{ -1 };					//浅色主题时使用的预设方案
+    bool auto_set_background_color{ false };        //根据任务栏颜色自动设置背景色
+
 	bool value_right_align{ false };	//数值是否右对齐
 	int digits_number{ 4 };				//数据位数
 	bool horizontal_arrange{ true };	//水平排列
+	bool show_status_bar{ true };		//显示 CPU/内存的状态条
 	bool tbar_wnd_on_left{ false };		//如果为true，则任务栏窗口显示在任务栏的左侧（或上方）
-	SpeedUnit speed_unit;		//网速的单位
-	bool hide_unit;			//隐藏单位
-	bool hide_percent;		//隐藏百分号
-	DoubleClickAction double_click_action;		//鼠标双击动作
+	bool cm_graph_type{ false };		//如果为false，默认原样式，柱状图显示占用率，如为true，滚动显示占用率
 };
 
+//选项设置中“常规设置”的数据
 struct GeneralSettingData
 {
-	//常规设置
 	bool check_update_when_start{ true };
 	bool auto_run{ false };
 	bool allow_skin_cover_font{ true };
@@ -158,7 +260,17 @@ struct GeneralSettingData
 	int memory_tip_value;			//要提示的内存使用率的临界值
 	//语言
 	Language language;
+
+	bool show_all_interface{ true };
+	bool m_get_cpu_usage_by_cpu_times{ true };	//获取CPU利用率的方式，如果为true则是使用GetSystemTimes，否则使用Pdh（性能计数器）
+
+	bool portable_mode{ false };		//便携模式，如果为true，则程序所有数据都保存到exe所在目录下，否则保存到Appdata\Romaing目录下
+    int monitor_time_span{ 1000 };    //监控的时间间隔
 };
+
+//定义监控时间间隔有效的最大值和最小值
+#define MONITOR_TIME_SPAN_MIN 200
+#define MONITOR_TIME_SPAN_MAX 2000
 
 enum class Alignment
 {

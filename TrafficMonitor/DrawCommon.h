@@ -22,9 +22,10 @@ public:
 	CDC* GetDC() { return m_pDC; }
 	void SetBackColor(COLORREF back_color) { m_back_color = back_color; }
 
-	void DrawWindowText(CRect rect, LPCTSTR lpszString, COLORREF color, Alignment align = Alignment::LEFT, bool draw_back_ground = false);	//在指定的矩形区域内绘制文本
+	void DrawWindowText(CRect rect, LPCTSTR lpszString, COLORREF color, Alignment align = Alignment::LEFT, bool draw_back_ground = false, bool multi_line = false);	//在指定的矩形区域内绘制文本
 
 	void SetDrawRect(CRect rect);		//设置绘图剪辑区域
+	static void SetDrawRect(CDC* pDC, CRect rect);
 
 	//绘制一个位图
 	//（注意：当stretch_mode设置为StretchMode::FILL（填充）时，会设置绘图剪辑区域，如果之后需要绘制其他图形，
@@ -43,6 +44,8 @@ public:
 	//从图像创建区域，如果像素点的亮度小于threshold（取值为0~255，0为黑色，255为白色），则该像素点在区域外
 	//https://blog.csdn.net/tajon1226/article/details/6589180
 	static void GetRegionFromImage(CRgn& rgn, CBitmap &cBitmap, int threshold);
+
+	void DrawLine(CPoint start_point, int height, COLORREF color);  //使用当前画笔画线
 
 private:
 	CDC* m_pDC{};		//用于绘图的CDC类的指针

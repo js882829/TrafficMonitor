@@ -1,5 +1,6 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include "Common.h"
+#include "TrafficMonitor.h"
 
 
 CCommon::CCommon()
@@ -24,127 +25,226 @@ wstring CCommon::StrToUnicode(const char* str, bool utf8)
 	return result;
 }
 
-string CCommon::UnicodeToStr(const wchar_t * wstr)
+string CCommon::UnicodeToStr(const wchar_t * wstr, bool utf8)
 {
 	string result;
 	int size{ 0 };
-	size = WideCharToMultiByte(CP_ACP, 0, wstr, -1, NULL, 0, NULL, NULL);
+	size = WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, NULL, 0, NULL, NULL);
 	if (size <= 0) return string();
 	char* str = new char[size + 1];
-	WideCharToMultiByte(CP_ACP, 0, wstr, -1, str, size, NULL, NULL);
+	WideCharToMultiByte((utf8 ? CP_UTF8 : CP_ACP), 0, wstr, -1, str, size, NULL, NULL);
 	result.assign(str);
 	delete[] str;
 	return result;
 }
 
-CString CCommon::DataSizeToString(unsigned int size, bool short_mode, SpeedUnit unit, bool hide_unit)
+void CCommon::StringNormalize(wstring & str)
 {
-	CString str;
-	switch (unit)
+	if (str.empty()) return;
+
+	int size = str.size();	//å­—ç¬¦ä¸²çš„é•¿åº¦
+	if (size < 0) return;
+	int index1 = 0;		//å­—ç¬¦ä¸²ä¸­ç¬¬1ä¸ªä¸æ˜¯ç©ºæ ¼æˆ–æ§åˆ¶å­—ç¬¦çš„ä½ç½®
+	int index2 = size - 1;	//å­—ç¬¦ä¸²ä¸­æœ€åä¸€ä¸ªä¸æ˜¯ç©ºæ ¼æˆ–æ§åˆ¶å­—ç¬¦çš„ä½ç½®
+	while (index1 < size && str[index1] >= 0 && str[index1] <= 32)
+		index1++;
+	while (index2 >= 0 && str[index2] >= 0 && str[index2] <= 32)
+		index2--;
+	if (index1 > index2)	//å¦‚æœindex1 > index2ï¼Œè¯´æ˜å­—ç¬¦ä¸²å…¨æ˜¯ç©ºæ ¼æˆ–æ§åˆ¶å­—ç¬¦
+		str.clear();
+	else if (index1 == 0 && index2 == size - 1)	//å¦‚æœindex1å’Œindex2çš„å€¼åˆ†åˆ«ä¸º0å’Œsize - 1ï¼Œè¯´æ˜å­—ç¬¦ä¸²å‰åæ²¡æœ‰ç©ºæ ¼æˆ–æ§åˆ¶å­—ç¬¦ï¼Œç›´æ¥è¿”å›
+		return;
+	else
+		str = str.substr(index1, index2 - index1 + 1);
+}
+
+void CCommon::StringSplit(const wstring & str, wchar_t div_ch, vector<wstring>& results, bool skip_empty, bool trim)
+{
+    results.clear();
+    size_t split_index = -1;
+    size_t last_split_index = -1;
+    while (true)
+    {
+        split_index = str.find(div_ch, split_index + 1);
+        wstring split_str = str.substr(last_split_index + 1, split_index - last_split_index - 1);
+        if (trim)
+            StringNormalize(split_str);
+        if (!split_str.empty() || !skip_empty)
+            results.push_back(split_str);
+        if (split_index == wstring::npos)
+            break;
+        last_split_index = split_index;
+    }
+}
+
+void CCommon::StringSplit(const wstring& str, const wstring& div_str, vector<wstring>& results, bool skip_empty /*= true*/, bool trim)
+{
+    results.clear();
+    size_t split_index = 0 - div_str.size();
+    size_t last_split_index = 0 - div_str.size();
+    while (true)
+    {
+        split_index = str.find(div_str, split_index + div_str.size());
+        wstring split_str = str.substr(last_split_index + div_str.size(), split_index - last_split_index - div_str.size());
+        if (trim)
+            StringNormalize(split_str);
+        if (!split_str.empty() || !skip_empty)
+            results.push_back(split_str);
+        if (split_index == wstring::npos)
+            break;
+        last_split_index = split_index;
+    }
+}
+
+CString CCommon::DataSizeToString(unsigned int size, const PublicSettingData& cfg)
+{
+	//CString str;
+	CString value_str, unit_str;
+	if (!cfg.unit_byte)		//å¦‚æœä½¿ç”¨æ¯”ç‰¹(bit)ä¸ºå•ä½ï¼Œåˆ™æ•°å€¼ä¹˜ä»¥8
+	{
+		size *= 8;
+	}
+	switch (cfg.speed_unit)
 	{
 	case SpeedUnit::AUTO:
-		if (short_mode)
+		if (cfg.speed_short_mode)
 		{
-			//if (size <= 102)			//Ğ¡ÓÚ0.1KBÊ±£¬ÏÔÊ¾0K
-			//	str = _T("0K");
-			/*else */if (size < 1024 * 10)					//10KBÒÔÏÂÒÔKBÎªµ¥Î»£¬±£Áô1Î»Ğ¡Êı
-				str.Format(_T("%.1f K"), size / 1024.0f);
-			else if (size < 1024 * 1024)			//1MBÒÔÏÂÒÔKBÎªµ¥Î»£¬±£ÁôÕûÊı
-				str.Format(_T("%.0f K"), size / 1024.0f);
-			else if (size < 1024 * 1024 * 1024)		//1GBÒÔÏÂÒÔMBÎªµ¥Î»£¬±£Áô1Î»Ğ¡Êı
-				str.Format(_T("%.1f M"), size / 1024.0f / 1024.0f);
+			if (size < 1024 * 10)					//10KBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™1ä½å°æ•°
+			{
+				value_str.Format(_T("%.1f"), size / 1024.0f);
+				unit_str = _T("K");
+			}
+			else if (size < 1024 * 1000)			//1000KBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™æ•´æ•°
+			{
+				value_str.Format(_T("%.0f"), size / 1024.0f);
+				unit_str = _T("K");
+			}
+			else if (size < 1024 * 1024 * 1000)		//1000MBä»¥ä¸‹ä»¥MBä¸ºå•ä½ï¼Œä¿ç•™1ä½å°æ•°
+			{
+				value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f);
+				unit_str = _T("M");
+			}
 			else
-				str.Format(_T("%.2f G"), size / 1024.0f / 1024.0f / 1024.0f);
+			{
+				value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f / 1024.0f);
+				unit_str = _T("G");
+			}
 		}
 		else
 		{
-			if (size < 1024 * 10)					//10KBÒÔÏÂÒÔKBÎªµ¥Î»£¬±£Áô2Î»Ğ¡Êı
-				str.Format(_T("%.2f KB"), size / 1024.0f);
-			else if (size < 1024 * 1024)			//1MBÒÔÏÂÒÔKBÎªµ¥Î»£¬±£Áô1Î»Ğ¡Êı
-				str.Format(_T("%.1f KB"), size / 1024.0f);
-			else if (size < 1024 * 1024 * 1024)		//1GBÒÔÏÂÒÔMBÎªµ¥Î»£¬±£Áô2Î»Ğ¡Êı
-				str.Format(_T("%.2f MB"), size / 1024.0f / 1024.0f);
+			if (size < 1024 * 10)					//10KBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™2ä½å°æ•°
+			{
+				value_str.Format(_T("%.2f"), size / 1024.0f);
+				unit_str = _T("KB");
+			}
+			else if (size < 1024 * 1000)			//1000KBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™1ä½å°æ•°
+			{
+				value_str.Format(_T("%.1f"), size / 1024.0f);
+				unit_str = _T("KB");
+			}
+			else if (size < 1024 * 1024 * 1000)		//1000MBä»¥ä¸‹ä»¥MBä¸ºå•ä½ï¼Œä¿ç•™2ä½å°æ•°
+			{
+				value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f);
+				unit_str = _T("MB");
+			}
 			else
-				str.Format(_T("%.2f GB"), size / 1024.0f / 1024.0f / 1024.0f);
+			{
+				value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f / 1024.0f);
+				unit_str = _T("GB");
+			}
 		}
 		break;
 	case SpeedUnit::KBPS:
-		if (short_mode)
+		if (cfg.speed_short_mode)
 		{
-			if (size < 1024 * 10)					//10KBÒÔÏÂ±£Áô1Î»Ğ¡Êı
-			{
-				if (hide_unit)
-					str.Format(_T("%.1f"), size / 1024.0f);
-				else
-					str.Format(_T("%.1f K"), size / 1024.0f);
-			}
-			else					//10KBÒÔÉÏ±£ÁôÕûÊı
-			{
-				if (hide_unit)
-					str.Format(_T("%.0f"), size / 1024.0f);
-				else
-					str.Format(_T("%.0fK"), size / 1024.0f);
-			}
+			if (size < 1024 * 10)					//10KBä»¥ä¸‹ä¿ç•™1ä½å°æ•°
+				value_str.Format(_T("%.1f"), size / 1024.0f);
+			else					//10KBä»¥ä¸Šä¿ç•™æ•´æ•°
+				value_str.Format(_T("%.0f"), size / 1024.0f);
+			if (!cfg.hide_unit)
+				unit_str = _T("K");
 		}
 		else
 		{
-			if (size < 1024 * 10)					//10KBÒÔÏÂ±£Áô2Î»Ğ¡Êı
-			{
-				if (hide_unit)
-					str.Format(_T("%.2f"), size / 1024.0f);
-				else
-					str.Format(_T("%.2f KB"), size / 1024.0f);
-			}
-			else			//10KBÒÔÉÏ±£Áô1Î»Ğ¡Êı
-			{
-				if (hide_unit)
-					str.Format(_T("%.1f"), size / 1024.0f);
-				else
-					str.Format(_T("%.1f KB"), size / 1024.0f);
-			}
+			if (size < 1024 * 10)					//10KBä»¥ä¸‹ä¿ç•™2ä½å°æ•°
+				value_str.Format(_T("%.2f"), size / 1024.0f);
+			else			//10KBä»¥ä¸Šä¿ç•™1ä½å°æ•°
+				value_str.Format(_T("%.1f"), size / 1024.0f);
+			if (!cfg.hide_unit)
+				unit_str = _T("KB");
 		}
 		break;
 	case SpeedUnit::MBPS:
-		if (short_mode)
+		if (cfg.speed_short_mode)
 		{
-			if (hide_unit)
-				str.Format(_T("%.1f"), size / 1024.0f / 1024.0f);
-			else
-				str.Format(_T("%.1f M"), size / 1024.0f / 1024.0f);
+			value_str.Format(_T("%.1f"), size / 1024.0f / 1024.0f);
+			if (!cfg.hide_unit)
+				unit_str = _T("M");
 		}
 		else
 		{
-			if (hide_unit)
-				str.Format(_T("%.2f"), size / 1024.0f / 1024.0f);
-			else
-				str.Format(_T("%.2f MB"), size / 1024.0f / 1024.0f);
+			value_str.Format(_T("%.2f"), size / 1024.0f / 1024.0f);
+			if (!cfg.hide_unit)
+				unit_str = _T("MB");
 		}
 		break;
+	}
+	CString str;
+	if (cfg.separate_value_unit_with_space && !cfg.hide_unit)
+		str = value_str + _T(' ') + unit_str;
+	else
+		str = value_str + unit_str;
+	if (!cfg.unit_byte)	
+	{
+		if (cfg.speed_short_mode && !cfg.hide_unit)
+			str += _T('b');		//å¦‚æœä½¿ç”¨æ¯”ç‰¹(bit)ä¸ºå•ä½ï¼Œå³ä½¿è®¾ç½®äº†ç½‘é€Ÿç®€æ´æ¨¡å¼ï¼Œä¹Ÿå°†â€œbâ€æ˜¾ç¤ºå‡ºæ¥
+		else
+			str.Replace(_T('B'), _T('b'));	//å¦‚æœä½¿ç”¨æ¯”ç‰¹(bit)ä¸ºå•ä½ï¼Œå°†Bæ›¿æ¢æˆb
 	}
 	return str;
 }
 
-CString CCommon::KBytesToString(unsigned int kb_size)
+CString CCommon::DataSizeToString(unsigned long long size)
 {
-	CString k_bytes_str;
-	if (kb_size < 1024)
-		k_bytes_str.Format(_T("%d KB"), kb_size);
-	else if (kb_size < 1024 * 1024)
-		k_bytes_str.Format(_T("%.2f MB"), kb_size / 1024.0);
+	CString str;
+	if (size < 1024 * 10)					//10KBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™2ä½å°æ•°
+		str.Format(_T("%.2f KB"), size / 1024.0);
+	else if (size < 1024 * 1024)			//1MBä»¥ä¸‹ä»¥KBä¸ºå•ä½ï¼Œä¿ç•™1ä½å°æ•°
+		str.Format(_T("%.1f KB"), size / 1024.0);
+	else if (size < 1024 * 1024 * 1024)		//1GBä»¥ä¸‹ä»¥MBä¸ºå•ä½ï¼Œä¿ç•™2ä½å°æ•°
+		str.Format(_T("%.2f MB"), size / 1024.0 / 1024.0);
+	else if (size < 1024ll * 1024 * 1024 * 1024)
+		str.Format(_T("%.2f GB"), size / 1024.0 / 1024.0 / 1024.0);
 	else
-		k_bytes_str.Format(_T("%.2f GB"), kb_size / 1024.0 / 1024.0);
-	return k_bytes_str;
+		str.Format(_T("%.2f TB"), size / 1024.0 / 1024.0 / 1024.0 / 1024.0);
+	return str;
 }
 
-CString CCommon::KBytesToStringL(__int64 kb_size)
+//CString CCommon::KBytesToString(unsigned int kb_size)
+//{
+//	CString k_bytes_str;
+//	if (kb_size < 1024)
+//		k_bytes_str.Format(_T("%d KB"), kb_size);
+//	else if (kb_size < 1024 * 1024)
+//		k_bytes_str.Format(_T("%.2f MB"), kb_size / 1024.0);
+//	else if (kb_size < 1024 * 1024 * 1024)
+//		k_bytes_str.Format(_T("%.2f GB"), kb_size / 1024.0 / 1024.0);
+//	else
+//		k_bytes_str.Format(_T("%.2f TB"), kb_size / 1024.0 / 1024.0 / 1024.0);
+//	return k_bytes_str;
+//}
+
+CString CCommon::KBytesToString(unsigned __int64 kb_size)
 {
 	CString k_bytes_str;
 	if (kb_size < 1024)
 		k_bytes_str.Format(_T("%d KB"), kb_size);
 	else if (kb_size < 1024 * 1024)
 		k_bytes_str.Format(_T("%.2f MB"), kb_size / 1024.0);
+	else if (kb_size < 1024 * 1024 * 1024)
+		k_bytes_str.Format(_T("%.2f GB"), kb_size / 1024.0 / 1024.0);
 	else
-		k_bytes_str.Format(_T("%.2f GB"), kb_size / (1024.0 * 1024.0));
+		k_bytes_str.Format(_T("%.2f TB"), kb_size / 1024.0 / 1024.0 / 1024.0);
 	return k_bytes_str;
 }
 
@@ -162,7 +262,7 @@ void CCommon::WriteLog(const char* str_text, LPCTSTR file_path)
 	char buff[32];
 	sprintf_s(buff, "%d/%.2d/%.2d %.2d:%.2d:%.2d.%.3d: ", cur_time.wYear, cur_time.wMonth, cur_time.wDay,
 		cur_time.wHour, cur_time.wMinute, cur_time.wSecond, cur_time.wMilliseconds);
-	ofstream file{ file_path, std::ios::app };	//ÒÔ×·¼ÓµÄ·½Ê½´ò¿ªÈÕÖ¾ÎÄ¼ş
+	ofstream file{ file_path, std::ios::app };	//ä»¥è¿½åŠ çš„æ–¹å¼æ‰“å¼€æ—¥å¿—æ–‡ä»¶
 	file << buff;
 	file << str_text << std::endl;
 }
@@ -174,7 +274,7 @@ void CCommon::WriteLog(const wchar_t * str_text, LPCTSTR file_path)
 	char buff[32];
 	sprintf_s(buff, "%d/%.2d/%.2d %.2d:%.2d:%.2d.%.3d: ", cur_time.wYear, cur_time.wMonth, cur_time.wDay,
 		cur_time.wHour, cur_time.wMinute, cur_time.wSecond, cur_time.wMilliseconds);
-	ofstream file{ file_path, std::ios::app };	//ÒÔ×·¼ÓµÄ·½Ê½´ò¿ªÈÕÖ¾ÎÄ¼ş
+	ofstream file{ file_path, std::ios::app };	//ä»¥è¿½åŠ çš„æ–¹å¼æ‰“å¼€æ—¥å¿—æ–‡ä»¶
 	file << buff;
 	file << UnicodeToStr(str_text).c_str() << std::endl;
 }
@@ -185,15 +285,15 @@ BOOL CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
 		return FALSE;
 
 	HRESULT hr;
-	IShellLink     *pLink;  //IShellLink¶ÔÏóÖ¸Õë
-	IPersistFile   *ppf; //IPersisFil¶ÔÏóÖ¸Õë
+	IShellLink     *pLink;  //IShellLinkå¯¹è±¡æŒ‡é’ˆ
+	IPersistFile   *ppf; //IPersisFilå¯¹è±¡æŒ‡é’ˆ
 
-						 //´´½¨IShellLink¶ÔÏó
+						 //åˆ›å»ºIShellLinkå¯¹è±¡
 	hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink, (void**)&pLink);
 	if (FAILED(hr))
 		return FALSE;
 
-	//´ÓIShellLink¶ÔÏóÖĞ»ñÈ¡IPersistFile½Ó¿Ú
+	//ä»IShellLinkå¯¹è±¡ä¸­è·å–IPersistFileæ¥å£
 	hr = pLink->QueryInterface(IID_IPersistFile, (void**)&ppf);
 	if (FAILED(hr))
 	{
@@ -204,20 +304,20 @@ BOOL CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
 	TCHAR file_path[MAX_PATH];
 	GetModuleFileName(NULL, file_path, MAX_PATH);
 
-	//Ä¿±ê
+	//ç›®æ ‡
 	if (lpszFileName == NULL)
 		pLink->SetPath(file_path);
 	else
 		pLink->SetPath(lpszFileName);
 
-	//¹¤×÷Ä¿Â¼
+	//å·¥ä½œç›®å½•
 	if (lpszWorkDir != NULL)
 	{
 		pLink->SetWorkingDirectory(lpszWorkDir);
 	}
 	else
 	{
-		//ÉèÖÃ¹¤×÷Ä¿Â¼Îª¿ì½İ·½Ê½Ä¿±êËùÔÚÎ»ÖÃ
+		//è®¾ç½®å·¥ä½œç›®å½•ä¸ºå¿«æ·æ–¹å¼ç›®æ ‡æ‰€åœ¨ä½ç½®
 		TCHAR workDirBuf[MAX_PATH]{};
 		if (lpszFileName == NULL)
 			//wcscpy_s(workDirBuf, file_path);
@@ -230,25 +330,25 @@ BOOL CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
 		pLink->SetWorkingDirectory(workDirBuf);
 	}
 
-	//¿ì½İ¼ü
+	//å¿«æ·é”®
 	if (wHotkey != 0)
 		pLink->SetHotkey(wHotkey);
 
-	//±¸×¢
+	//å¤‡æ³¨
 	if (lpszDescription != NULL)
 		pLink->SetDescription(lpszDescription);
 
-	//ÏÔÊ¾·½Ê½
+	//æ˜¾ç¤ºæ–¹å¼
 	pLink->SetShowCmd(iShowCmd);
 
 
-	//¿ì½İ·½Ê½µÄÂ·¾¶ + Ãû³Æ
+	//å¿«æ·æ–¹å¼çš„è·¯å¾„ + åç§°
 	wchar_t szBuffer[MAX_PATH];
-	if (lpszLnkFileName != NULL) //Ö¸¶¨ÁË¿ì½İ·½Ê½µÄÃû³Æ
+	if (lpszLnkFileName != NULL) //æŒ‡å®šäº†å¿«æ·æ–¹å¼çš„åç§°
 		swprintf_s(szBuffer, L"%s\\%s", lpszLnkFileDir, lpszLnkFileName);
 	else
 	{
-		//Ã»ÓĞÖ¸¶¨Ãû³Æ£¬¾Í´ÓÈ¡Ö¸¶¨ÎÄ¼şµÄÎÄ¼şÃû×÷Îª¿ì½İ·½Ê½Ãû³Æ¡£
+		//æ²¡æœ‰æŒ‡å®šåç§°ï¼Œå°±ä»å–æŒ‡å®šæ–‡ä»¶çš„æ–‡ä»¶åä½œä¸ºå¿«æ·æ–¹å¼åç§°ã€‚
 		const wchar_t *pstr;
 		if (lpszFileName != NULL)
 			pstr = wcsrchr(lpszFileName, L'\\');
@@ -261,15 +361,15 @@ BOOL CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
 			pLink->Release();
 			return FALSE;
 		}
-		//×¢Òâºó×ºÃûÒª´Ó.exe¸ÄÎª.lnk
+		//æ³¨æ„åç¼€åè¦ä».exeæ”¹ä¸º.lnk
 		swprintf_s(szBuffer, L"%s\\%s", lpszLnkFileDir, pstr);
 		int nLen = wcslen(szBuffer);
 		szBuffer[nLen - 3] = L'l';
 		szBuffer[nLen - 2] = L'n';
 		szBuffer[nLen - 1] = L'k';
 	}
-	//±£´æ¿ì½İ·½Ê½µ½Ö¸¶¨Ä¿Â¼ÏÂ
-	//WCHAR  wsz[MAX_PATH];  //¶¨ÒåUnicode×Ö·û´®
+	//ä¿å­˜å¿«æ·æ–¹å¼åˆ°æŒ‡å®šç›®å½•ä¸‹
+	//WCHAR  wsz[MAX_PATH];  //å®šä¹‰Unicodeå­—ç¬¦ä¸²
 	//MultiByteToWideChar(CP_ACP, 0, szBuffer, -1, wsz, MAX_PATH);
 
 	hr = ppf->Save(szBuffer, TRUE);
@@ -293,9 +393,9 @@ wstring CCommon::GetStartUpPath()
 
 void CCommon::GetFiles(const wchar_t* path, vector<wstring>& files)
 {
-	//ÎÄ¼ş¾ä±ú 
+	//æ–‡ä»¶å¥æŸ„ 
 	intptr_t hFile = 0;
-	//ÎÄ¼şĞÅÏ¢£¨ÓÃUnicode±£´æÊ¹ÓÃ_wfinddata_t£¬¶à×Ö½Ú×Ö·û¼¯Ê¹ÓÃ_finddata_t£©
+	//æ–‡ä»¶ä¿¡æ¯ï¼ˆç”¨Unicodeä¿å­˜ä½¿ç”¨_wfinddata_tï¼Œå¤šå­—èŠ‚å­—ç¬¦é›†ä½¿ç”¨_finddata_tï¼‰
 	_wfinddata_t fileinfo;
 	wstring file_name;
 	if ((hFile = _wfindfirst(wstring(path).append(L"\\*").c_str(), &fileinfo)) != -1)
@@ -304,8 +404,8 @@ void CCommon::GetFiles(const wchar_t* path, vector<wstring>& files)
 		{
 			file_name.assign(fileinfo.name);
 			if (file_name != L"." && file_name != L"..")
-				//files.push_back(wstring(path) + L"\\" + file_name);  //½«ÎÄ¼şÃû±£´æ(ºöÂÔ"."ºÍ"..")
-				files.push_back(L"\\" + file_name);  //½«ÎÄ¼şÃû±£´æ(ºöÂÔ"."ºÍ"..")
+				//files.push_back(wstring(path) + L"\\" + file_name);  //å°†æ–‡ä»¶åä¿å­˜(å¿½ç•¥"."å’Œ"..")
+				files.push_back(L"\\" + file_name);  //å°†æ–‡ä»¶åä¿å­˜(å¿½ç•¥"."å’Œ"..")
 		} while (_wfindnext(hFile, &fileinfo) == 0);
 	}
 	_findclose(hFile);
@@ -313,15 +413,14 @@ void CCommon::GetFiles(const wchar_t* path, vector<wstring>& files)
 
 bool CCommon::FileExist(LPCTSTR file_name)
 {
-	_wfinddata_t fileinfo;
-	return (_wfindfirst(file_name, &fileinfo) != -1);
+    return (PathFileExists(file_name) != 0);
 }
 
 bool CCommon::MoveAFile(LPCTSTR exist_file, LPCTSTR new_file)
 {
 	if(!FileExist(exist_file))
 		return false;
-	//if (FileExist(new_file))		//Èç¹ûÄ¿±êÎÄ¼şÒÑ¾­´æÔÚ£¬ÔòÏÈÉ¾³ıËü
+	//if (FileExist(new_file))		//å¦‚æœç›®æ ‡æ–‡ä»¶å·²ç»å­˜åœ¨ï¼Œåˆ™å…ˆåˆ é™¤å®ƒ
 	//	DeleteFile(new_file);
 	return (MoveFile(exist_file, new_file) != 0);
 }
@@ -355,7 +454,7 @@ SYSTEMTIME CCommon::CompareSystemTime(SYSTEMTIME a, SYSTEMTIME b)
 	return result;
 }
 
-wstring CCommon::GetExePath()
+wstring CCommon::GetModuleDir()
 {
 	wchar_t path[MAX_PATH];
 	GetModuleFileNameW(NULL, path, MAX_PATH);
@@ -366,25 +465,25 @@ wstring CCommon::GetExePath()
 	return current_path;
 }
 
-wstring CCommon::GetSystemPath()
+wstring CCommon::GetSystemDir()
 {
 	wchar_t buff[MAX_PATH];
 	GetSystemDirectory(buff, MAX_PATH);
 	return wstring(buff);
 }
 
-wstring CCommon::GetTemplatePath()
+wstring CCommon::GetTemplateDir()
 {
 	wstring result;
 	wchar_t buff[MAX_PATH];
-	GetTempPath(MAX_PATH, buff);		//»ñÈ¡ÁÙÊ±ÎÄ¼ş¼ĞµÄÂ·¾¶
+	GetTempPath(MAX_PATH, buff);		//è·å–ä¸´æ—¶æ–‡ä»¶å¤¹çš„è·¯å¾„
 	result = buff;
-	if (result.back() != L'\\' && result.back() != L'/')		//È·±£Â·¾¶ºóÃæÓĞĞ±¸Ü
+	if (result.back() != L'\\' && result.back() != L'/')		//ç¡®ä¿è·¯å¾„åé¢æœ‰æ–œæ 
 		result.push_back(L'\\');
 	return result;
 }
 
-wstring CCommon::GetAppDataConfigPath()
+wstring CCommon::GetAppDataConfigDir()
 {
 	LPITEMIDLIST ppidl;
 	TCHAR pszAppDataPath[MAX_PATH];
@@ -393,10 +492,10 @@ wstring CCommon::GetAppDataConfigPath()
 		SHGetPathFromIDList(ppidl, pszAppDataPath);
 		CoTaskMemFree(ppidl);
 	}
-	wstring app_data_path{ pszAppDataPath };		//»ñÈ¡µ½C:/User/ÓÃ»§Ãû/AppData/RoamingÂ·¾¶
-	CreateDirectory(app_data_path.c_str(), NULL);		//Èç¹ûRoaming²»´æÔÚ£¬Ôò´´½¨Ëü
+	wstring app_data_path{ pszAppDataPath };		//è·å–åˆ°C:/User/ç”¨æˆ·å/AppData/Roamingè·¯å¾„
+	CreateDirectory(app_data_path.c_str(), NULL);		//å¦‚æœRoamingä¸å­˜åœ¨ï¼Œåˆ™åˆ›å»ºå®ƒ
 	app_data_path += L"\\TrafficMonitor\\";
-	CreateDirectory(app_data_path.c_str(), NULL);		//Èç¹ûC:/User/ÓÃ»§Ãû/AppData/Roaming/TrafficMonitor²»´æÔÚ£¬Ôò´´½¨Ëü
+	CreateDirectory(app_data_path.c_str(), NULL);		//å¦‚æœC:/User/ç”¨æˆ·å/AppData/Roaming/TrafficMonitorä¸å­˜åœ¨ï¼Œåˆ™åˆ›å»ºå®ƒ
 
 	return app_data_path;
 }
@@ -405,42 +504,42 @@ void CCommon::DrawWindowText(CDC * pDC, CRect rect, LPCTSTR lpszString, COLORREF
 {
 	pDC->SetTextColor(color);
 	//m_pDC->SetBkMode(TRANSPARENT);
-	//ÓÃ±³¾°É«Ìî³ä¾ØĞÎÇøÓò
+	//ç”¨èƒŒæ™¯è‰²å¡«å……çŸ©å½¢åŒºåŸŸ
 	pDC->FillSolidRect(rect, back_color);
 	pDC->DrawText(lpszString, rect, DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
 }
 
-void CCommon::SetDrawArea(CDC * pDC, CRect rect)
-{
-	CRgn rgn;
-	rgn.CreateRectRgnIndirect(rect);
-	pDC->SelectClipRgn(&rgn);
-}
+//void CCommon::SetDrawArea(CDC * pDC, CRect rect)
+//{
+//	CRgn rgn;
+//	rgn.CreateRectRgnIndirect(rect);
+//	pDC->SelectClipRgn(&rgn);
+//}
 
 
 bool CCommon::IsForegroundFullscreen()
 {
-	bool bFullscreen{ false };		//ÓÃÓÚÖ¸Ê¾Ç°Ì¨´°¿ÚÊÇ·ñÊÇÈ«ÆÁ
+	bool bFullscreen{ false };		//ç”¨äºæŒ‡ç¤ºå‰å°çª—å£æ˜¯å¦æ˜¯å…¨å±
 	HWND hWnd;
 	RECT rcApp;
 	RECT rcDesk;
-	hWnd = GetForegroundWindow();	//»ñÈ¡µ±Ç°ÕıÔÚÓëÓÃ»§½»»¥µÄÇ°Ì¨´°¿Ú¾ä±ú
+	hWnd = GetForegroundWindow();	//è·å–å½“å‰æ­£åœ¨ä¸ç”¨æˆ·äº¤äº’çš„å‰å°çª—å£å¥æŸ„
 	TCHAR buff[256];
-	GetClassName(hWnd, buff, 256);		//»ñÈ¡Ç°Ì¨´°¿ÚµÄÀàÃû
+	GetClassName(hWnd, buff, 256);		//è·å–å‰å°çª—å£çš„ç±»å
 	CString class_name{ buff };
-	if (hWnd != GetDesktopWindow() && class_name!=_T("WorkerW") && hWnd != GetShellWindow())//Èç¹ûÇ°Ì¨´°¿Ú²»ÊÇ×ÀÃæ´°¿Ú£¬Ò²²»ÊÇ¿ØÖÆÌ¨´°¿Ú
+	if (hWnd != GetDesktopWindow() && class_name!=_T("WorkerW") && hWnd != GetShellWindow())//å¦‚æœå‰å°çª—å£ä¸æ˜¯æ¡Œé¢çª—å£ï¼Œä¹Ÿä¸æ˜¯æ§åˆ¶å°çª—å£
 	{
-		GetWindowRect(hWnd, &rcApp);	//»ñÈ¡Ç°Ì¨´°¿ÚµÄ×ø±ê
-		GetWindowRect(GetDesktopWindow(), &rcDesk);	//¸ù¾İ×ÀÃæ´°¿Ú¾ä±ú£¬»ñÈ¡Õû¸öÆÁÄ»µÄ×ø±ê
-		if (rcApp.left <= rcDesk.left && //Èç¹ûÇ°Ì¨´°¿ÚµÄ×ø±êÍêÈ«¸²¸Ç×¡×ÀÃæ´°¿Ú£¬¾Í±íÊ¾Ç°Ì¨´°¿ÚÊÇÈ«ÆÁµÄ
+		GetWindowRect(hWnd, &rcApp);	//è·å–å‰å°çª—å£çš„åæ ‡
+		GetWindowRect(GetDesktopWindow(), &rcDesk);	//æ ¹æ®æ¡Œé¢çª—å£å¥æŸ„ï¼Œè·å–æ•´ä¸ªå±å¹•çš„åæ ‡
+		if (rcApp.left <= rcDesk.left && //å¦‚æœå‰å°çª—å£çš„åæ ‡å®Œå…¨è¦†ç›–ä½æ¡Œé¢çª—å£ï¼Œå°±è¡¨ç¤ºå‰å°çª—å£æ˜¯å…¨å±çš„
 			rcApp.top <= rcDesk.top &&
 			rcApp.right >= rcDesk.right &&
 			rcApp.bottom >= rcDesk.bottom)
 		{
 			bFullscreen = true;
 		}
-	}//Èç¹ûÇ°Ì¨´°¿ÚÊÇ×ÀÃæ´°¿Ú£¬»òÕßÊÇ¿ØÖÆÌ¨´°¿Ú£¬¾ÍÖ±½Ó·µ»Ø²»ÊÇÈ«ÆÁ
+	}//å¦‚æœå‰å°çª—å£æ˜¯æ¡Œé¢çª—å£ï¼Œæˆ–è€…æ˜¯æ§åˆ¶å°çª—å£ï¼Œå°±ç›´æ¥è¿”å›ä¸æ˜¯å…¨å±
 	return bFullscreen;
 }
 
@@ -462,81 +561,33 @@ bool CCommon::CopyStringToClipboard(const wstring & str)
 	else return false;
 }
 
-//bool CCommon::WhenStart(int time, bool write_log)
-//{
-//	int tick_count = GetTickCount();
-//	if (write_log)
-//	{
-//		char buff[128];
-//		sprintf_s(buff, "start time is %dms, no_multistart_warning_time is %d", tick_count, time);
-//		WriteLog(buff, _T(".\\start.log"));
-//	}
-//	return (tick_count < time);
-//}
 
-//CString CCommon::GetMouseTipsInfo(__int64 today_traffic, int cpu_usage, int memory_usage, int used_memory, int total_memory, bool show_cpu_memory)
-//{
-//	CString tip_info;
-//	if (show_cpu_memory)
-//	{
-//		tip_info.Format(_T("½ñÈÕÒÑÊ¹ÓÃÁ÷Á¿£º%s\r\nÄÚ´æÊ¹ÓÃ£º%s/%s"),
-//			CCommon::KBytesToString(static_cast<unsigned int>(today_traffic / 1024)),
-//			CCommon::KBytesToString(used_memory), CCommon::KBytesToString(total_memory));
-//	}
-//	else
-//	{
-//		tip_info.Format(_T("½ñÈÕÒÑÊ¹ÓÃÁ÷Á¿£º%s\r\nCPUÊ¹ÓÃ£º%d%%\r\nÄÚ´æÊ¹ÓÃ£º%s/%s (%d%%)"),
-//			CCommon::KBytesToString(static_cast<unsigned int>(today_traffic / 1024)),
-//			cpu_usage,
-//			CCommon::KBytesToString(used_memory), CCommon::KBytesToString(total_memory),
-//			memory_usage);
-//	}
-//	return tip_info;
-//}
-
-void CCommon::GetWindowsVersion(int & major_version, int & minor_version, int & build_number)
+wstring CCommon::GetJsonValueSimple(const wstring& json_str, const wstring& name)
 {
-	DWORD dwMajorVer{}, dwMinorVer{}, dwBuildNumber{};
-	HMODULE hModNtdll{};
-	if (hModNtdll = ::LoadLibraryW(L"ntdll.dll"))
-	{
-		typedef void (WINAPI *pfRTLGETNTVERSIONNUMBERS)(DWORD*, DWORD*, DWORD*);
-		pfRTLGETNTVERSIONNUMBERS pfRtlGetNtVersionNumbers;
-		pfRtlGetNtVersionNumbers = (pfRTLGETNTVERSIONNUMBERS)::GetProcAddress(hModNtdll, "RtlGetNtVersionNumbers");
-		if (pfRtlGetNtVersionNumbers)
-		{
-			pfRtlGetNtVersionNumbers(&dwMajorVer, &dwMinorVer, &dwBuildNumber);
-			dwBuildNumber &= 0x0ffff;
-		}
-		::FreeLibrary(hModNtdll);
-		hModNtdll = NULL;
-	}
-	major_version = dwMajorVer;
-	minor_version = dwMinorVer;
-	build_number = dwBuildNumber;
+    wstring str_name{ L"\"" };
+    str_name += name;
+    str_name += L'\"';
+    size_t index = json_str.find(str_name);
+    if (index == wstring::npos)
+        return wstring();
+    index = json_str.find(L':', index + 1);
+    if (index == wstring::npos)
+        return wstring();
+    index = json_str.find_first_not_of(L"\" ", index + 1);
+    size_t index_end = json_str.find_first_of(L"\",]}\r\n", index);
+    wstring result = json_str.substr(index, index_end - index);
+    return result;
 }
 
-bool CCommon::IsWindows10FallCreatorOrLater()
+bool CCommon::GetURL(const wstring & url, wstring & result, bool utf8, const wstring& user_agent)
 {
-	int major_version, minor_version, build_number;
-	GetWindowsVersion(major_version, minor_version, build_number);
-	if (major_version > 10)
-		return true;
-	else if (major_version == 10 && minor_version > 0)
-		return true;
-	else if (major_version == 10 && minor_version == 0 && build_number >= 16299)
-		return true;
-	else return false;
-}
-
-bool CCommon::GetURL(const wstring & url, wstring & result, bool utf8)
-{
-	bool sucessed{ false };
-	CInternetSession session{};
-	CHttpFile* pfile{};
+	bool succeed{ false };
+    CInternetSession* pSession{};
+    CHttpFile* pfile{};
 	try
 	{
-		pfile = (CHttpFile *)session.OpenURL(url.c_str());
+        pSession = new CInternetSession(user_agent.c_str());
+		pfile = (CHttpFile *)pSession->OpenURL(url.c_str());
 		DWORD dwStatusCode;
 		pfile->QueryInfoStatusCode(dwStatusCode);
 		if (dwStatusCode == HTTP_STATUS_OK)
@@ -548,25 +599,32 @@ bool CCommon::GetURL(const wstring & url, wstring & result, bool utf8)
 				content += data;
 			}
 			result = StrToUnicode((const char*)content.GetString(), utf8);
-			sucessed = true;
+			succeed = true;
 		}
 		pfile->Close();
 		delete pfile;
-		session.Close();
+        pSession->Close();
 	}
 	catch (CInternetException* e)
 	{
-		if (pfile != nullptr)
+        //å†™å…¥é”™è¯¯æ—¥å¿—
+        CString info = CCommon::LoadTextFormat(IDS_GET_URL_ERROR_LOG_INFO, { url, static_cast<size_t>(e->m_dwError) });
+        CCommon::WriteLog(info, theApp.m_log_path.c_str());
+        if (pfile != nullptr)
 		{
 			pfile->Close();
 			delete pfile;
 		}
-		session.Close();
-		sucessed = false;
-		e->Delete();		//Ã»ÓĞÕâ¾ä»áÔì³ÉÄÚ´æĞ¹Â¶
+        if (pSession != nullptr)
+            pSession->Close();
+		succeed = false;
+		e->Delete();		//æ²¡æœ‰è¿™å¥ä¼šé€ æˆå†…å­˜æ³„éœ²
+        SAFE_DELETE(pSession);
 	}
-	return sucessed;
+    SAFE_DELETE(pSession);
+    return succeed;
 }
+
 
 void CCommon::GetInternetIp(wstring& ip_address, wstring& ip_location, bool global)
 {
@@ -583,11 +641,11 @@ void CCommon::GetInternetIp(wstring& ip_address, wstring& ip_location, bool glob
 		if (index == wstring::npos || index1 == wstring::npos)
 			ip_address.clear();
 		else
-			ip_address = web_page.substr(index + 6, index1 - index - 6);	//»ñÈ¡IPµØÖ·
-		if (ip_address.size() > 15 || ip_address.size() < 7)		//IPµØÖ·×î³¤15¸ö×Ö·û£¬×î¶Ì7¸ö×Ö·û
+			ip_address = web_page.substr(index + 6, index1 - index - 6);	//è·å–IPåœ°å€
+		if (ip_address.size() > 15 || ip_address.size() < 7)		//IPåœ°å€æœ€é•¿15ä¸ªå­—ç¬¦ï¼Œæœ€çŸ­7ä¸ªå­—ç¬¦
 			ip_address.clear();
 
-		//»ñÈ¡IPµØÖ·¹éÊôµØ
+		//è·å–IPåœ°å€å½’å±åœ°
 		if (!global)
 		{
 			index = web_page.find(L"<code>", index1 + 7);
@@ -612,6 +670,26 @@ void CCommon::GetInternetIp(wstring& ip_address, wstring& ip_location, bool glob
 		ip_address.clear();
 	}
 }
+
+void CCommon::GetInternetIp2(wstring & ip_address, wstring & ip_location, bool ipv6)
+{
+    wstring raw_string;
+    wstring user_agent{ L"TrafficMonitor/" };
+    user_agent += VERSION;
+    if (GetURL((ipv6 ? L"https://v6.yinghualuo.cn/bejson" : L"https://v4.yinghualuo.cn/bejson"), raw_string, true, user_agent))
+    {
+        //è§£æè·å–çš„jsonå­—ç¬¦ä¸²
+        ip_address = GetJsonValueSimple(raw_string, L"ip");
+        ip_location = GetJsonValueSimple(raw_string, L"location");
+
+    }
+    else
+    {
+        ip_address.clear();
+        ip_location.clear();
+    }
+}
+
 
 void CCommon::SetRect(CRect & rect, int x, int y, int width, int height)
 {
@@ -641,10 +719,47 @@ CString CCommon::LoadText(LPCTSTR front_str, UINT id, LPCTSTR back_str)
 	return str;
 }
 
-CString CCommon::IntToString(int n)
+CString CCommon::StringFormat(LPCTSTR format_str, const std::initializer_list<CVariant>& paras)
+{
+	CString str_rtn = format_str;
+	int index = 1;
+	for (const auto& para : paras)
+	{
+		CString para_str = para.ToString();
+		CString format_para;
+		format_para.Format(_T("<%%%d%%>"), index);
+		str_rtn.Replace(format_para, para_str);
+
+		index++;
+	}
+	return str_rtn;
+}
+
+CString CCommon::LoadTextFormat(UINT id, const std::initializer_list<CVariant>& paras)
 {
 	CString str;
-	str.Format(_T("%d"), n);
+	str.LoadString(id);
+	return StringFormat(str.GetString(), paras);
+}
+
+CString CCommon::IntToString(int n, bool thousand_separation, bool is_unsigned)
+{
+	CString str;
+	if(is_unsigned)
+		str.Format(_T("%u"), static_cast<unsigned int>(n));
+	else
+		str.Format(_T("%d"), n);
+	int length{ str.GetLength() };
+	int count{};
+	if (thousand_separation)
+	{
+		for (int i{ length - 1 }; i > 0; i--)
+		{
+			count++;
+			if (count % 3 == 0)
+				str.Insert(i, _T(","));
+		}
+	}
 	return str;
 }
 
@@ -708,12 +823,45 @@ void CCommon::WStringCopy(wchar_t * str_dest, int dest_size, const wchar_t * str
 	int i;
 	for (i = 0; i < dest_size && i < source_size && str_source[i] != L'\0'; i++)
 		str_dest[i] = str_source[i];
-	//È·±£Ä¿±ê×Ö·û´®Ä©Î²ÓĞÒ»¸ö\0
+	//ç¡®ä¿ç›®æ ‡å­—ç¬¦ä¸²æœ«å°¾æœ‰ä¸€ä¸ª\0
 	int copy_cnt = i;
 	if (copy_cnt < dest_size)
 		str_dest[copy_cnt] = L'\0';
 	else
 		str_dest[dest_size - 1] = L'\0';
+}
+
+double CCommon::StringSimilarDegree_LD(const string & srcString, const string & matchString)
+{
+	int n = srcString.size();
+	int m = matchString.size();
+	//int[, ] d = new int[n + 1, m + 1]; // matrix
+	vector<vector<int>> d(n + 1, vector<int>(m + 1));
+	int cost; // cost
+			  // Step 1ï¼ˆå¦‚æœå…¶ä¸­ä¸€ä¸ªå­—ç¬¦ä¸²é•¿åº¦ä¸º0ï¼Œåˆ™ç›¸ä¼¼åº¦ä¸º1ï¼‰ï¼Ÿ
+			  //if (n == 0) return (double)m / max(srcString.size(), matchString.size());
+			  //if (m == 0) return (double)n / max(srcString.size(), matchString.size());
+	if (n == 0 || m == 0) return 0.0;	//å¦‚æœå…¶ä¸­ä¸€ä¸ªå­—ç¬¦ä¸²é•¿åº¦ä¸º0ï¼Œåˆ™ç›¸ä¼¼åº¦ä¸º0
+										// Step 2
+	for (int i = 0; i <= n; d[i][0] = i++);
+	for (int j = 0; j <= m; d[0][j] = j++);
+	// Step 3
+	for (int i = 1; i <= n; i++)
+	{
+		//Step 4
+		for (int j = 1; j <= m; j++)
+		{
+			// Step 5
+			cost = (matchString.substr(j - 1, 1) == srcString.substr(i - 1, 1) ? 0 : 1);
+			// Step 6
+			d[i][j] = min(min(d[i - 1][j] + 1, d[i][j - 1] + 1), d[i - 1][j - 1] + cost);
+		}
+	}
+
+	// Step 7
+	double ds = 1 - (double)d[n][m] / max(srcString.size(), matchString.size());
+
+	return ds;
 }
 
 void CCommon::SetThreadLanguage(Language language)
@@ -722,6 +870,125 @@ void CCommon::SetThreadLanguage(Language language)
 	{
 	case Language::ENGLISH: SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US)); break;
 	case Language::SIMPLIFIED_CHINESE: SetThreadUILanguage(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)); break;
+	case Language::TRADITIONAL_CHINESE: SetThreadUILanguage(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL)); break;
 	default: break;
 	}
+}
+
+void CCommon::SetColorMode(ColorMode mode)
+{
+	switch (mode)
+	{
+	case ColorMode::Default:
+		CTrafficMonitorApp::self->m_taskbar_data.dft_back_color = 0;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_transparent_color = 0;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_status_bar_color = 0x005A5A5A;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_text_colors = 0x00ffffffU;
+		CTrafficMonitorApp::self->m_cfg_data.m_dft_notify_icon = 0;
+		break;
+	case ColorMode::Light:
+		CTrafficMonitorApp::self->m_taskbar_data.dft_back_color = 0x00D3D2D2;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_transparent_color = 0x00D3D2D2;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_status_bar_color = 0x00A5A5A5;
+		CTrafficMonitorApp::self->m_taskbar_data.dft_text_colors = 0x00000000U;
+		CTrafficMonitorApp::self->m_cfg_data.m_dft_notify_icon = 4;
+		break;
+	default:
+		break;
+	}
+}
+
+void CCommon::TransparentColorConvert(COLORREF& transparent_color)
+{
+	if (transparent_color == 0)
+		return;
+	BYTE r = GetRValue(transparent_color);
+	BYTE g = GetGValue(transparent_color);
+	BYTE b = GetBValue(transparent_color);
+	if (r == b)
+	{
+		if (b >= 255)
+			b--;
+		else
+			b++;
+		transparent_color = RGB(r, g, b);
+	}
+}
+
+void CCommon::SetDialogFont(CWnd * pDlg, CFont * pFont)
+{
+	if (pDlg->GetSafeHwnd() != NULL)
+	{
+		CWnd *pWndChild;
+		pWndChild = pDlg->GetWindow(GW_CHILD);
+		while (pWndChild)
+		{
+			pWndChild->SetFont(pFont);
+			pWndChild = pWndChild->GetWindow(GW_HWNDNEXT);
+		}
+	}
+}
+
+CString CCommon::GetTextResource(UINT id, int code_type)
+{
+    CString res_str;
+    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(id), _T("TEXT"));
+    if (hRes != NULL)
+    {
+        HGLOBAL hglobal = LoadResource(NULL, hRes);
+        if (hglobal != NULL)
+        {
+            if (code_type == 2)
+            {
+                res_str = (const wchar_t*)hglobal;
+            }
+            else
+            {
+                res_str = CCommon::StrToUnicode((const char*)hglobal, (code_type != 0)).c_str();
+            }
+        }
+    }
+    return res_str;
+}
+
+HICON CCommon::LoadIconResource(UINT id, int size)
+{
+    return (HICON)LoadImage(AfxGetInstanceHandle(), MAKEINTRESOURCE(id), IMAGE_ICON, size, size, 0);
+}
+
+int CCommon::GetMenuItemPosition(CMenu* pMenu, UINT id)
+{
+    int pos = -1;
+    int item_count = pMenu->GetMenuItemCount();
+    for (int i = 0; i < item_count; i++)
+    {
+        if (pMenu->GetMenuItemID(i) == id)
+        {
+            pos = i;
+            break;
+        }
+    }
+    return pos;
+}
+
+bool CCommon::IsColorSimilar(COLORREF color1, COLORREF color2)
+{
+    const int DIFF{ 24 };
+    return (std::abs(GetRValue(color1) - GetRValue(color2)) < DIFF
+        && std::abs(GetGValue(color1) - GetGValue(color2)) < DIFF
+        && std::abs(GetBValue(color1) - GetBValue(color2)) < DIFF);
+}
+
+int CCommon::CountOneBits(unsigned int value)
+{
+    int count = 0;
+    while (value != 0)
+    {
+        if (value % 2 == 1)
+        {
+            count++;
+        }
+        value = value >> 1;
+    }
+    return count;
 }

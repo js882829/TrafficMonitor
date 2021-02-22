@@ -1,3 +1,4 @@
-<version>1.73</version>
-<link>https://github.com/zhongyang219/TrafficMonitor/releases/download/V1.73/TrafficMonitor_V1.73.7z</link>
-<contents>新增：多语言支持，增加英语；\n新增：字体设置支持粗体、斜体、下划线等字体样式；\n新增：历史流量统计中的日历视图；\n修正：当悬浮窗在右下角时，有时程序启动后悬浮窗会往左或往上移动一段距离的问题；\n配置文件转移到C:\Users\用户名\AppData\Roaming\TrafficMonitor目录下，防止由于程序所在目录无法写入数据导致配置文件无法保存的问题；\n新增：网速数据位数设置的选项；修正有时当网速超过10M/s时数据显示的全的问题。</contents>
+<version>1.79.1</version>
+<link>https://github.com/zhongyang219/TrafficMonitor/releases/download/V1.79.1/TrafficMonitor_V1.79.1_x86.7z</link>
+<link_x64>https://github.com/zhongyang219/TrafficMonitor/releases/download/V1.79.1/TrafficMonitor_V1.79.1_x64.7z</link_x64>
+<contents>修正注册表句柄泄漏的问题。\n修正当主窗口和任务栏窗口都不显示时，不统计CPU和内存利用率的问题。</contents>

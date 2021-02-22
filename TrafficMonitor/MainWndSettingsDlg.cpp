@@ -5,7 +5,7 @@
 #include "TrafficMonitor.h"
 #include "MainWndSettingsDlg.h"
 #include "afxdialogex.h"
-
+#include "CMFCColorDialogEx.h"
 
 // CMainWndSettingsDlg 对话框
 
@@ -37,6 +37,38 @@ void CMainWndSettingsDlg::DrawStaticColor()
 	}
 }
 
+void CMainWndSettingsDlg::IniUnitCombo()
+{
+	m_unit_combo.ResetContent();
+	m_unit_combo.AddString(CCommon::LoadText(IDS_AUTO));
+	if (m_data.unit_byte)
+	{
+		m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" KB/s")));
+		m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" MB/s")));
+	}
+	else
+	{
+		m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" Kb/s")));
+		m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" Mb/s")));
+	}
+	m_unit_combo.SetCurSel(static_cast<int>(m_data.speed_unit));
+}
+
+void CMainWndSettingsDlg::EnableControl()
+{
+    bool exe_path_enable = (m_data.double_click_action == DoubleClickAction::SEPCIFIC_APP);
+    CWnd* pWnd{};
+    pWnd = GetDlgItem(IDC_EXE_PATH_STATIC);
+    if (pWnd != nullptr)
+        pWnd->ShowWindow(exe_path_enable ? SW_SHOW : SW_HIDE);
+    pWnd = GetDlgItem(IDC_EXE_PATH_EDIT);
+    if (pWnd != nullptr)
+        pWnd->ShowWindow(exe_path_enable ? SW_SHOW : SW_HIDE);
+    pWnd = GetDlgItem(IDC_BROWSE_BUTTON);
+    if (pWnd != nullptr)
+        pWnd->ShowWindow(exe_path_enable ? SW_SHOW : SW_HIDE);
+}
+
 void CMainWndSettingsDlg::DoDataExchange(CDataExchange* pDX)
 {
 	DDX_Control(pDX, IDC_TEXT_COLOR_STATIC, m_color_static);
@@ -65,6 +97,11 @@ BEGIN_MESSAGE_MAP(CMainWndSettingsDlg, CTabDlg)
 	ON_MESSAGE(WM_STATIC_CLICKED, &CMainWndSettingsDlg::OnStaticClicked)
 	ON_BN_CLICKED(IDC_SPECIFY_EACH_ITEM_COLOR_CHECK, &CMainWndSettingsDlg::OnBnClickedSpecifyEachItemColorCheck)
 	ON_CBN_SELCHANGE(IDC_DOUBLE_CLICK_COMBO, &CMainWndSettingsDlg::OnCbnSelchangeDoubleClickCombo)
+	ON_BN_CLICKED(IDC_SEPARATE_VALUE_UNIT_CHECK, &CMainWndSettingsDlg::OnBnClickedSeparateValueUnitCheck)
+	ON_BN_CLICKED(IDC_UNIT_BYTE_RADIO, &CMainWndSettingsDlg::OnBnClickedUnitByteRadio)
+	ON_BN_CLICKED(IDC_UNIT_BIT_RADIO, &CMainWndSettingsDlg::OnBnClickedUnitBitRadio)
+    ON_BN_CLICKED(IDC_SHOW_TOOL_TIP_CHK, &CMainWndSettingsDlg::OnBnClickedShowToolTipChk)
+    ON_BN_CLICKED(IDC_BROWSE_BUTTON, &CMainWndSettingsDlg::OnBnClickedBrowseButton)
 END_MESSAGE_MAP()
 
 
@@ -85,14 +122,16 @@ BOOL CMainWndSettingsDlg::OnInitDialog()
 	m_font_size_edit.SetRange(5, 72);
 	m_font_size_edit.SetValue(m_data.font.size);
 
-	SetDlgItemText(IDC_UPLOAD_EDIT, m_data.disp_str.up.c_str());
-	SetDlgItemText(IDC_DOWNLOAD_EDIT, m_data.disp_str.down.c_str());
-	SetDlgItemText(IDC_CPU_EDIT, m_data.disp_str.cpu.c_str());
-	SetDlgItemText(IDC_MEMORY_EDIT, m_data.disp_str.memory.c_str());
+	SetDlgItemText(IDC_UPLOAD_EDIT, m_data.disp_str.Get(TDI_UP).c_str());
+	SetDlgItemText(IDC_DOWNLOAD_EDIT, m_data.disp_str.Get(TDI_DOWN).c_str());
+	SetDlgItemText(IDC_CPU_EDIT, m_data.disp_str.Get(TDI_CPU).c_str());
+	SetDlgItemText(IDC_MEMORY_EDIT, m_data.disp_str.Get(TDI_MEMORY).c_str());
 
 	((CButton*)GetDlgItem(IDC_SWITCH_UP_DOWN_CHECK))->SetCheck(m_data.swap_up_down);
 	((CButton*)GetDlgItem(IDC_FULLSCREEN_HIDE_CHECK))->SetCheck(m_data.hide_main_wnd_when_fullscreen);
 	((CButton*)GetDlgItem(IDC_SPEED_SHORT_MODE_CHECK2))->SetCheck(m_data.speed_short_mode);
+	((CButton*)GetDlgItem(IDC_SEPARATE_VALUE_UNIT_CHECK))->SetCheck(m_data.separate_value_unit_with_space);
+    ((CButton*)GetDlgItem(IDC_SHOW_TOOL_TIP_CHK))->SetCheck(m_data.show_tool_tip);
 
 	m_color_static.SetLinkCursor();
 	DrawStaticColor();
@@ -101,10 +140,12 @@ BOOL CMainWndSettingsDlg::OnInitDialog()
 	m_toolTip.SetMaxTipWidth(theApp.DPI(300));
 	m_toolTip.AddTool(GetDlgItem(IDC_SPEED_SHORT_MODE_CHECK2), CCommon::LoadText(IDS_SPEED_SHORT_MODE_TIP));
 
-	m_unit_combo.AddString(CCommon::LoadText(IDS_AUTO));
-	m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" KB/s")));
-	m_unit_combo.AddString(CCommon::LoadText(IDS_FIXED_AS, _T(" MB/s")));
-	m_unit_combo.SetCurSel(static_cast<int>(m_data.speed_unit));
+	if (m_data.unit_byte)
+		((CButton*)GetDlgItem(IDC_UNIT_BYTE_RADIO))->SetCheck(TRUE);
+	else
+		((CButton*)GetDlgItem(IDC_UNIT_BIT_RADIO))->SetCheck(TRUE);
+
+	IniUnitCombo();
 
 	m_hide_unit_chk.SetCheck(m_data.hide_unit);
 	if (m_data.speed_unit == SpeedUnit::AUTO)
@@ -134,9 +175,13 @@ BOOL CMainWndSettingsDlg::OnInitDialog()
 	m_double_click_combo.AddString(CCommon::LoadText(IDS_SHOW_HIDE_MORE_INFO));
 	m_double_click_combo.AddString(CCommon::LoadText(IDS_OPEN_OPTION_SETTINGS));
 	m_double_click_combo.AddString(CCommon::LoadText(IDS_OPEN_TASK_MANAGER));
-	m_double_click_combo.AddString(CCommon::LoadText(IDS_CHANGE_SKIN));
+    m_double_click_combo.AddString(CCommon::LoadText(IDS_SPECIFIC_APP));
+    m_double_click_combo.AddString(CCommon::LoadText(IDS_CHANGE_SKIN));
 	m_double_click_combo.AddString(CCommon::LoadText(IDS_NONE));
 	m_double_click_combo.SetCurSel(static_cast<int>(m_data.double_click_action));
+
+    SetDlgItemText(IDC_EXE_PATH_EDIT, m_data.double_click_exe.c_str());
+    EnableControl();
 
 	return TRUE;  // return TRUE unless you set the focus to a control
 				  // 异常: OCX 属性页应返回 FALSE
@@ -153,7 +198,7 @@ void CMainWndSettingsDlg::OnEnChangeUploadEdit()
 	// TODO:  在此添加控件通知处理程序代码
 	CString tmp;
 	GetDlgItemText(IDC_UPLOAD_EDIT, tmp);
-	m_data.disp_str.up = tmp;
+	m_data.disp_str.Get(TDI_UP) = tmp;
 }
 
 
@@ -167,7 +212,7 @@ void CMainWndSettingsDlg::OnEnChangeDownloadEdit()
 	// TODO:  在此添加控件通知处理程序代码
 	CString tmp;
 	GetDlgItemText(IDC_DOWNLOAD_EDIT, tmp);
-	m_data.disp_str.down = tmp;
+	m_data.disp_str.Get(TDI_DOWN) = tmp;
 }
 
 
@@ -181,7 +226,7 @@ void CMainWndSettingsDlg::OnEnChangeCpuEdit()
 	// TODO:  在此添加控件通知处理程序代码
 	CString tmp;
 	GetDlgItemText(IDC_CPU_EDIT, tmp);
-	m_data.disp_str.cpu = tmp;
+	m_data.disp_str.Get(TDI_CPU) = tmp;
 }
 
 
@@ -195,21 +240,21 @@ void CMainWndSettingsDlg::OnEnChangeMemoryEdit()
 	// TODO:  在此添加控件通知处理程序代码
 	CString tmp;
 	GetDlgItemText(IDC_MEMORY_EDIT, tmp);
-	m_data.disp_str.memory = tmp;
+	m_data.disp_str.Get(TDI_MEMORY) = tmp;
 }
 
 
 void CMainWndSettingsDlg::OnBnClickedSetDefaultButton()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	m_data.disp_str.up = CCommon::LoadText(IDS_UPLOAD_DISP, _T(": "));
-	m_data.disp_str.down = CCommon::LoadText(IDS_DOWNLOAD_DISP, _T(": "));
-	m_data.disp_str.cpu = L"CPU: ";
-	m_data.disp_str.memory = CCommon::LoadText(IDS_MEMORY_DISP, _T(": "));
-	SetDlgItemText(IDC_UPLOAD_EDIT, m_data.disp_str.up.c_str());
-	SetDlgItemText(IDC_DOWNLOAD_EDIT, m_data.disp_str.down.c_str());
-	SetDlgItemText(IDC_CPU_EDIT, m_data.disp_str.cpu.c_str());
-	SetDlgItemText(IDC_MEMORY_EDIT, m_data.disp_str.memory.c_str());
+	m_data.disp_str.Get(TDI_UP) = CCommon::LoadText(IDS_UPLOAD_DISP, _T(": "));
+	m_data.disp_str.Get(TDI_DOWN) = CCommon::LoadText(IDS_DOWNLOAD_DISP, _T(": "));
+	m_data.disp_str.Get(TDI_CPU) = L"CPU: ";
+	m_data.disp_str.Get(TDI_MEMORY) = CCommon::LoadText(IDS_MEMORY_DISP, _T(": "));
+	SetDlgItemText(IDC_UPLOAD_EDIT, m_data.disp_str.Get(TDI_UP).c_str());
+	SetDlgItemText(IDC_DOWNLOAD_EDIT, m_data.disp_str.Get(TDI_DOWN).c_str());
+	SetDlgItemText(IDC_CPU_EDIT, m_data.disp_str.Get(TDI_CPU).c_str());
+	SetDlgItemText(IDC_MEMORY_EDIT, m_data.disp_str.Get(TDI_MEMORY).c_str());
 }
 
 
@@ -348,7 +393,7 @@ afx_msg LRESULT CMainWndSettingsDlg::OnStaticClicked(WPARAM wParam, LPARAM lPara
 		}
 		else
 		{
-			CColorDialog colorDlg(m_data.text_colors[0], 0, this);
+			CMFCColorDialogEx colorDlg(m_data.text_colors[0], 0, this);
 			if (colorDlg.DoModal() == IDOK)
 			{
 				m_data.text_colors[0] = colorDlg.GetColor();
@@ -376,4 +421,48 @@ void CMainWndSettingsDlg::OnCbnSelchangeDoubleClickCombo()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	m_data.double_click_action = static_cast<DoubleClickAction>(m_double_click_combo.GetCurSel());
+    EnableControl();
+}
+
+
+void CMainWndSettingsDlg::OnBnClickedSeparateValueUnitCheck()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	m_data.separate_value_unit_with_space = (((CButton*)GetDlgItem(IDC_SEPARATE_VALUE_UNIT_CHECK))->GetCheck() != 0);
+}
+
+
+void CMainWndSettingsDlg::OnBnClickedUnitByteRadio()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	m_data.unit_byte = true;
+	IniUnitCombo();
+}
+
+
+void CMainWndSettingsDlg::OnBnClickedUnitBitRadio()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	m_data.unit_byte = false;
+	IniUnitCombo();
+}
+
+
+void CMainWndSettingsDlg::OnBnClickedShowToolTipChk()
+{
+    // TODO: 在此添加控件通知处理程序代码
+    m_data.show_tool_tip = (((CButton*)GetDlgItem(IDC_SHOW_TOOL_TIP_CHK))->GetCheck() != 0);
+}
+
+
+void CMainWndSettingsDlg::OnBnClickedBrowseButton()
+{
+    // TODO: 在此添加控件通知处理程序代码
+    CString szFilter = CCommon::LoadText(IDS_EXE_FILTER);
+    CFileDialog fileDlg(TRUE, NULL, NULL, 0, szFilter, this);
+    if (IDOK == fileDlg.DoModal())
+    {
+        m_data.double_click_exe = fileDlg.GetPathName();
+        SetDlgItemText(IDC_EXE_PATH_EDIT, m_data.double_click_exe.c_str());
+    }
 }

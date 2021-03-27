@@ -518,7 +518,27 @@ CString CTaskBarDlg::GetMouseTipsInfo()
 			CCommon::KBytesToString(theApp.m_total_memory));
 		tip_info += temp;
 	}
-	return tip_info;
+    if (!IsShowCpuTemperature())
+    {
+        temp.Format(_T("\r\n%s: %.1f ℃"), CCommon::LoadText(IDS_CPU_TEMPERATURE), theApp.m_cpu_temperature);
+        tip_info += temp;
+    }
+    if (!IsShowGpuTemperature())
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_GPU_TEMPERATURE), static_cast<int>(theApp.m_gpu_temperature));
+        tip_info += temp;
+    }
+    if (!IsShowHddTemperature())
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_HDD_TEMPERATURE), static_cast<int>(theApp.m_hdd_temperature));
+        tip_info += temp;
+    }
+    if (!IsShowMainboardTemperature())
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), static_cast<int>(theApp.m_main_board_temperature));
+        tip_info += temp;
+    }
+    return tip_info;
 }
 
 void CTaskBarDlg::SetTextFont()
@@ -529,7 +549,7 @@ void CTaskBarDlg::SetTextFont()
 		m_font.DeleteObject();
 	}
 	//创建新的字体
-    theApp.m_taskbar_data.font.Create(m_font);
+    theApp.m_taskbar_data.font.Create(m_font, theApp.GetDpi());
 }
 
 void CTaskBarDlg::ApplySettings()

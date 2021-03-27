@@ -101,6 +101,7 @@ BEGIN_MESSAGE_MAP(CTrafficMonitorDlg, CDialog)
     ON_COMMAND(ID_SHOW_HDD_TEMPERATURE, &CTrafficMonitorDlg::OnShowHddTemperature)
     ON_COMMAND(ID_SHOW_MAIN_BOARD_TEMPERATURE, &CTrafficMonitorDlg::OnShowMainBoardTemperature)
     ON_WM_PAINT()
+    ON_MESSAGE(WM_DPICHANGED, &CTrafficMonitorDlg::OnDpichanged)
 END_MESSAGE_MAP()
 
 
@@ -114,74 +115,58 @@ CString CTrafficMonitorDlg::GetMouseTipsInfo()
 		CCommon::LoadText(IDS_DOWNLOAD), CCommon::KBytesToString(static_cast<unsigned int>(theApp.m_today_down_traffic / 1024))
 		);
 	tip_info += temp;
-	if (theApp.m_cfg_data.m_show_more_info)
+    const CSkinFile::Layout& skin_layout{ theApp.m_cfg_data.m_show_more_info ? m_skin.GetLayoutInfo().layout_l : m_skin.GetLayoutInfo().layout_s }; //当前的皮肤布局
+	if (!skin_layout.GetItem(TDI_UP).show)		//如果主窗口中没有显示上传速度，则在提示信息中显示上传速度
 	{
-		if (!m_skin.GetLayoutInfo().layout_l.GetItem(TDI_UP).show)		//如果主窗口中没有显示上传速度，则在提示信息中显示上传速度
-		{
-			temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_UPLOAD),
-				CCommon::DataSizeToString(theApp.m_out_speed, theApp.m_main_wnd_data));
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_l.GetItem(TDI_DOWN).show)
-		{
-			temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_DOWNLOAD),
-				CCommon::DataSizeToString(theApp.m_in_speed, theApp.m_main_wnd_data));
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_l.GetItem(TDI_CPU).show)
-		{
-			temp.Format(_T("\r\n%s: %d%%"), CCommon::LoadText(IDS_CPU_USAGE), theApp.m_cpu_usage);
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_l.GetItem(TDI_MEMORY).show)
-		{
-			temp.Format(_T("\r\n%s: %s/%s (%d%%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
-				CCommon::KBytesToString(theApp.m_used_memory),
-				CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
-			tip_info += temp;
-		}
-		else
-		{
-			temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
-				CCommon::KBytesToString(theApp.m_used_memory),
-				CCommon::KBytesToString(theApp.m_total_memory));
-			tip_info += temp;
-		}
+		temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_UPLOAD),
+			CCommon::DataSizeToString(theApp.m_out_speed, theApp.m_main_wnd_data));
+		tip_info += temp;
+	}
+	if (!skin_layout.GetItem(TDI_DOWN).show)
+	{
+		temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_DOWNLOAD),
+			CCommon::DataSizeToString(theApp.m_in_speed, theApp.m_main_wnd_data));
+		tip_info += temp;
+	}
+	if (!skin_layout.GetItem(TDI_CPU).show)
+	{
+		temp.Format(_T("\r\n%s: %d%%"), CCommon::LoadText(IDS_CPU_USAGE), theApp.m_cpu_usage);
+		tip_info += temp;
+	}
+	if (!skin_layout.GetItem(TDI_MEMORY).show)
+	{
+		temp.Format(_T("\r\n%s: %s/%s (%d%%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
+			CCommon::KBytesToString(theApp.m_used_memory),
+			CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
+		tip_info += temp;
 	}
 	else
 	{
-		if (!m_skin.GetLayoutInfo().layout_s.GetItem(TDI_UP).show)		//如果主窗口中没有显示上传速度，则在提示信息中显示上传速度
-		{
-			temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_UPLOAD),
-				CCommon::DataSizeToString(theApp.m_out_speed, theApp.m_main_wnd_data));
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_s.GetItem(TDI_DOWN).show)
-		{
-			temp.Format(_T("\r\n%s: %s/s"), CCommon::LoadText(IDS_DOWNLOAD),
-				CCommon::DataSizeToString(theApp.m_in_speed, theApp.m_main_wnd_data));
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_s.GetItem(TDI_CPU).show)
-		{
-			temp.Format(_T("\r\n%s: %d%%"), CCommon::LoadText(IDS_CPU_USAGE), theApp.m_cpu_usage);
-			tip_info += temp;
-		}
-		if (!m_skin.GetLayoutInfo().layout_s.GetItem(TDI_MEMORY).show)
-		{
-			temp.Format(_T("\r\n%s: %s/%s (%d%%)"), CCommon::LoadText(IDS_MEMORY_USAGE),
-				CCommon::KBytesToString(theApp.m_used_memory),
-				CCommon::KBytesToString(theApp.m_total_memory), theApp.m_memory_usage);
-			tip_info += temp;
-		}
-		else
-		{
-			temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
-				CCommon::KBytesToString(theApp.m_used_memory),
-				CCommon::KBytesToString(theApp.m_total_memory));
-			tip_info += temp;
-		}
+		temp.Format(_T("\r\n%s: %s/%s"), CCommon::LoadText(IDS_MEMORY_USAGE),
+			CCommon::KBytesToString(theApp.m_used_memory),
+			CCommon::KBytesToString(theApp.m_total_memory));
+		tip_info += temp;
 	}
+    if (!skin_layout.GetItem(TDI_CPU_TEMP).show)
+    {
+        temp.Format(_T("\r\n%s: %.1f ℃"), CCommon::LoadText(IDS_CPU_TEMPERATURE), theApp.m_cpu_temperature);
+        tip_info += temp;
+    }
+    if (!skin_layout.GetItem(TDI_GPU_TEMP).show)
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_GPU_TEMPERATURE), static_cast<int>(theApp.m_gpu_temperature));
+        tip_info += temp;
+    }
+    if (!skin_layout.GetItem(TDI_HDD_TEMP).show)
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_HDD_TEMPERATURE), static_cast<int>(theApp.m_hdd_temperature));
+        tip_info += temp;
+    }
+    if (!skin_layout.GetItem(TDI_MAIN_BOARD_TEMP).show)
+    {
+        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), static_cast<int>(theApp.m_main_board_temperature));
+        tip_info += temp;
+    }
 	return tip_info;
 }
 
@@ -717,7 +702,7 @@ BOOL CTrafficMonitorDlg::OnInitDialog()
 	//设置隐藏任务栏图标
 	ModifyStyleEx(WS_EX_APPWINDOW, WS_EX_TOOLWINDOW);
 
-	theApp.GetDPI(this);
+	theApp.DPIFromWindow(this);
 	//获取屏幕大小
 	GetScreenSize();
 	::SystemParametersInfo(SPI_GETWORKAREA, 0, &m_screen_rect, 0);   // 获得工作区大小
@@ -2270,4 +2255,17 @@ void CTrafficMonitorDlg::OnPaint()
         m_skin.DrawInfoL(&dc, m_font);
     else
         m_skin.DrawInfoS(&dc, m_font);
+}
+
+
+afx_msg LRESULT CTrafficMonitorDlg::OnDpichanged(WPARAM wParam, LPARAM lParam)
+{
+    int dpi = LOWORD(wParam);
+    theApp.SetDPI(dpi);
+    if (IsTaskbarWndValid())
+    {
+        //根据新的DPI重新设置任务栏窗口字体
+        m_tBarDlg->SetTextFont();
+    }
+    return 0;
 }

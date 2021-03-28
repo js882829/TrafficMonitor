@@ -49,6 +49,7 @@ public:
     float m_gpu_temperature{};  //显卡温度
     float m_hdd_temperature{};  //硬盘温度
     float m_main_board_temperature{};    //主板温度
+    int m_gpu_usage{};      //显卡利用率
 
 	__int64 m_today_up_traffic{};	//今天已使用的上传流量
 	__int64 m_today_down_traffic{};	//今天已使用的下载流量
@@ -104,7 +105,8 @@ public:
     int GetDpi() const { return m_dpi; }
     void SetDPI(int dpi) { m_dpi = dpi; }
 
-	static void CheckUpdate(bool message);		//检查更新，如果message为true，则在检查时弹出提示信息
+	void CheckUpdate(bool message);		//检查更新，如果message为true，则在检查时弹出提示信息
+    void CheckUpdateInThread(bool message); //在后台线程中检查更新
 	//启动时检查更新线程函数
 	static UINT CheckUpdateThreadFunc(LPVOID lpParam);
 	static UINT InitOpenHardwareMonitorLibThreadFunc(LPVOID lpParam);
@@ -123,13 +125,17 @@ public:
 
     void AutoSelectNotifyIcon();
 
+    bool IsCheckingForUpdate() const { return m_checking_update; }      //是否正在检查更新
+
 private:
 	//int m_no_multistart_warning_time{};		//用于设置在开机后多长时间内不弹出“已经有一个程序正在运行”的警告提示
 	bool m_no_multistart_warning{};			//如果为false，则永远都不会弹出“已经有一个程序正在运行”的警告提示
 	bool m_exit_when_start_by_restart_manager{ true };		//如果程序被Windows重启管理器重新启动，则退出程序
 	int m_dpi{ 96 };
-	CWinThread* m_pUpdateThread;			//检查更新的线程
-    CWinThread* m_pMonitorInitThread;       //初始化OpenHardwareMonitor库的线程
+
+    bool m_checking_update{ false };        //是否正在检查更新
+
+    struct CheckForUpdateLocker;
 
     std::map<UINT, HICON> m_menu_icons;      //菜单图标资源。key是图标资源的ID，vlaue是图标的句柄
 

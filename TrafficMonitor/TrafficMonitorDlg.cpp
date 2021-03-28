@@ -102,6 +102,8 @@ BEGIN_MESSAGE_MAP(CTrafficMonitorDlg, CDialog)
     ON_COMMAND(ID_SHOW_MAIN_BOARD_TEMPERATURE, &CTrafficMonitorDlg::OnShowMainBoardTemperature)
     ON_WM_PAINT()
     ON_MESSAGE(WM_DPICHANGED, &CTrafficMonitorDlg::OnDpichanged)
+    ON_MESSAGE(WM_TASKBAR_WND_CLOSED, &CTrafficMonitorDlg::OnTaskbarWndClosed)
+    ON_COMMAND(ID_SHOW_GPU, &CTrafficMonitorDlg::OnShowGpuUsage)
 END_MESSAGE_MAP()
 
 
@@ -147,26 +149,28 @@ CString CTrafficMonitorDlg::GetMouseTipsInfo()
 			CCommon::KBytesToString(theApp.m_total_memory));
 		tip_info += temp;
 	}
+#ifndef WITHOUT_TEMPERATURE
     if (!skin_layout.GetItem(TDI_CPU_TEMP).show)
     {
-        temp.Format(_T("\r\n%s: %.1f ℃"), CCommon::LoadText(IDS_CPU_TEMPERATURE), theApp.m_cpu_temperature);
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_CPU_TEMPERATURE), CCommon::TemperatureToString(theApp.m_cpu_temperature, theApp.m_main_wnd_data));
         tip_info += temp;
     }
     if (!skin_layout.GetItem(TDI_GPU_TEMP).show)
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_GPU_TEMPERATURE), static_cast<int>(theApp.m_gpu_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_GPU_TEMPERATURE), CCommon::TemperatureToString(theApp.m_gpu_temperature, theApp.m_main_wnd_data));
         tip_info += temp;
     }
     if (!skin_layout.GetItem(TDI_HDD_TEMP).show)
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_HDD_TEMPERATURE), static_cast<int>(theApp.m_hdd_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_HDD_TEMPERATURE), CCommon::TemperatureToString(theApp.m_hdd_temperature, theApp.m_main_wnd_data));
         tip_info += temp;
     }
     if (!skin_layout.GetItem(TDI_MAIN_BOARD_TEMP).show)
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), static_cast<int>(theApp.m_main_board_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), CCommon::TemperatureToString(theApp.m_main_board_temperature, theApp.m_main_wnd_data));
         tip_info += temp;
     }
+#endif
 	return tip_info;
 }
 
@@ -991,6 +995,7 @@ void CTrafficMonitorDlg::OnTimer(UINT_PTR nIDEvent)
             theApp.m_gpu_temperature = theApp.m_pMonitor->GpuTemperature();
             theApp.m_hdd_temperature = theApp.m_pMonitor->HDDTemperature();
             theApp.m_main_board_temperature = theApp.m_pMonitor->MainboardTemperature();
+            theApp.m_gpu_usage = theApp.m_pMonitor->GpuUsage();
         }
 #endif
 
@@ -1622,6 +1627,8 @@ void CTrafficMonitorDlg::OnInitMenu(CMenu* pMenu)
 
 	pMenu->EnableMenuItem(ID_SELECT_ALL_CONNECTION, MF_BYCOMMAND | (theApp.m_general_data.show_all_interface? MF_GRAYED : MF_ENABLED));
 
+    pMenu->EnableMenuItem(ID_CHECK_UPDATE, MF_BYCOMMAND | (theApp.IsCheckingForUpdate() ? MF_GRAYED : MF_ENABLED));
+
 	//pMenu->SetDefaultItem(ID_NETWORK_INFO);
 }
 
@@ -2134,7 +2141,7 @@ void CTrafficMonitorDlg::OnUpdateAlowOutOfBorder(CCmdUI *pCmdUI)
 void CTrafficMonitorDlg::OnCheckUpdate()
 {
 	// TODO: 在此添加命令处理程序代码
-	theApp.CheckUpdate(true);
+	theApp.CheckUpdateInThread(true);
 }
 
 
@@ -2268,4 +2275,24 @@ afx_msg LRESULT CTrafficMonitorDlg::OnDpichanged(WPARAM wParam, LPARAM lParam)
         m_tBarDlg->SetTextFont();
     }
     return 0;
+}
+
+
+afx_msg LRESULT CTrafficMonitorDlg::OnTaskbarWndClosed(WPARAM wParam, LPARAM lParam)
+{
+    theApp.m_cfg_data.m_show_task_bar_wnd = false;
+    //关闭任务栏窗口后，如果没有显示通知区图标，且没有显示主窗口或设置了鼠标穿透，则将通知区图标显示出来
+    if (!theApp.m_cfg_data.m_show_notify_icon && (theApp.m_cfg_data.m_hide_main_window || theApp.m_cfg_data.m_mouse_penetrate))
+    {
+        AddNotifyIcon();
+        theApp.m_cfg_data.m_show_notify_icon = true;
+    }
+    return 0;
+}
+
+
+void CTrafficMonitorDlg::OnShowGpuUsage()
+{
+    // TODO: 在此添加命令处理程序代码
+    TaskbarShowHideItem(TDI_GPU_USAGE);
 }

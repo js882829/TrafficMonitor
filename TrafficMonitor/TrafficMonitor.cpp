@@ -25,9 +25,22 @@ BEGIN_MESSAGE_MAP(CTrafficMonitorApp, CWinApp)
 END_MESSAGE_MAP()
 
 
-// CTrafficMonitorApp 构造
 CTrafficMonitorApp* CTrafficMonitorApp::self = NULL;
 
+struct CTrafficMonitorApp::CheckForUpdateLocker
+{
+    CheckForUpdateLocker()
+    {
+        theApp.m_checking_update = true;
+    }
+    ~CheckForUpdateLocker()
+    {
+        theApp.m_checking_update = false;
+    }
+};
+
+
+// CTrafficMonitorApp 构造
 CTrafficMonitorApp::CTrafficMonitorApp()
 {
 	self = this;
@@ -100,6 +113,7 @@ void CTrafficMonitorApp::LoadConfig()
 	m_main_wnd_data.disp_str.Get(TDI_DOWN) = ini.GetString(L"config", L"down_string", CCommon::LoadText(IDS_DOWNLOAD_DISP, _T(": $")));
 	m_main_wnd_data.disp_str.Get(TDI_CPU) = ini.GetString(L"config", L"cpu_string", L"CPU: $");
 	m_main_wnd_data.disp_str.Get(TDI_MEMORY) = ini.GetString(L"config", L"memory_string", CCommon::LoadText(IDS_MEMORY_DISP, _T(": $")));
+	m_main_wnd_data.disp_str.Get(TDI_GPU_USAGE) = ini.GetString(L"config", L"gpu_string", CCommon::LoadText(IDS_GPU_DISP, _T(": $")));
     m_main_wnd_data.disp_str.Get(TDI_CPU_TEMP) = ini.GetString(L"config", L"cpu_temp_string", L"CPU: $");
     m_main_wnd_data.disp_str.Get(TDI_GPU_TEMP) = ini.GetString(L"config", L"gpu_temp_string", CCommon::LoadText(IDS_GPU_DISP, _T(": $")));
     m_main_wnd_data.disp_str.Get(TDI_HDD_TEMP) = ini.GetString(L"config", L"hdd_temp_string", CCommon::LoadText(IDS_HDD_DISP, _T(": $")));
@@ -173,6 +187,7 @@ void CTrafficMonitorApp::LoadConfig()
 	m_taskbar_data.disp_str.Get(TDI_DOWN) = ini.GetString(L"task_bar", L"down_string", L"↓: $");
 	m_taskbar_data.disp_str.Get(TDI_CPU) = ini.GetString(L"task_bar", L"cpu_string", L"CPU: $");
 	m_taskbar_data.disp_str.Get(TDI_MEMORY) = ini.GetString(L"task_bar", L"memory_string", CCommon::LoadText(IDS_MEMORY_DISP, _T(": $")));
+	m_taskbar_data.disp_str.Get(TDI_GPU_USAGE) = ini.GetString(L"task_bar", L"gpu_string", CCommon::LoadText(IDS_GPU_DISP, _T(": $")));
 	m_taskbar_data.disp_str.Get(TDI_CPU_TEMP) = ini.GetString(L"task_bar", L"cpu_temp_string", L"CPU: $");
 	m_taskbar_data.disp_str.Get(TDI_GPU_TEMP) = ini.GetString(L"task_bar", L"gpu_temp_string", L"GPU: $");
 	m_taskbar_data.disp_str.Get(TDI_HDD_TEMP) = ini.GetString(L"task_bar", L"hdd_temp_string", L"HDD: $");
@@ -264,6 +279,7 @@ void CTrafficMonitorApp::SaveConfig()
 	ini.WriteString(_T("config"), _T("down_string"), m_main_wnd_data.disp_str.Get(TDI_DOWN));
 	ini.WriteString(_T("config"), _T("cpu_string"), m_main_wnd_data.disp_str.Get(TDI_CPU));
 	ini.WriteString(_T("config"), _T("memory_string"), m_main_wnd_data.disp_str.Get(TDI_MEMORY));
+	ini.WriteString(_T("config"), _T("gpu_string"), m_main_wnd_data.disp_str.Get(TDI_GPU_USAGE));
 	ini.WriteString(_T("config"), _T("cpu_temp_string"), m_main_wnd_data.disp_str.Get(TDI_CPU_TEMP));
 	ini.WriteString(_T("config"), _T("gpu_temp_string"), m_main_wnd_data.disp_str.Get(TDI_GPU_TEMP));
 	ini.WriteString(_T("config"), _T("hdd_temp_string"), m_main_wnd_data.disp_str.Get(TDI_HDD_TEMP));
@@ -310,6 +326,7 @@ void CTrafficMonitorApp::SaveConfig()
 	ini.WriteString(_T("task_bar"), _T("down_string"), m_taskbar_data.disp_str.Get(TDI_DOWN));
 	ini.WriteString(_T("task_bar"), _T("cpu_string"), m_taskbar_data.disp_str.Get(TDI_CPU));
 	ini.WriteString(_T("task_bar"), _T("memory_string"), m_taskbar_data.disp_str.Get(TDI_MEMORY));
+	ini.WriteString(_T("task_bar"), _T("gpu_string"), m_taskbar_data.disp_str.Get(TDI_GPU_USAGE));
 	ini.WriteString(_T("task_bar"), _T("cpu_temp_string"), m_taskbar_data.disp_str.Get(TDI_CPU_TEMP));
 	ini.WriteString(_T("task_bar"), _T("gpu_temp_string"), m_taskbar_data.disp_str.Get(TDI_GPU_TEMP));
 	ini.WriteString(_T("task_bar"), _T("hdd_temp_string"), m_taskbar_data.disp_str.Get(TDI_HDD_TEMP));
@@ -435,7 +452,10 @@ void CTrafficMonitorApp::DPIFromWindow(CWnd* pWnd)
 
 void CTrafficMonitorApp::CheckUpdate(bool message)
 {
-	CWaitCursor wait_cursor;
+    if (m_checking_update)      //如果还在检查更新，则直接返回
+        return;
+    CheckForUpdateLocker update_locker;
+    CWaitCursor wait_cursor;
 
 	wstring version;		//程序版本
 	wstring link;			//下载链接
@@ -500,11 +520,16 @@ void CTrafficMonitorApp::CheckUpdate(bool message)
 	}
 }
 
+void CTrafficMonitorApp::CheckUpdateInThread(bool message)
+{
+    AfxBeginThread(CheckUpdateThreadFunc, (LPVOID)message);
+}
+
 UINT CTrafficMonitorApp::CheckUpdateThreadFunc(LPVOID lpParam)
 {
 	CCommon::SetThreadLanguage(theApp.m_general_data.language);		//设置线程语言
-	CheckUpdate(false);		//检查更新
-	return 0;
+	theApp.CheckUpdate(lpParam);		//检查更新
+    return 0;
 }
 
 UINT CTrafficMonitorApp::InitOpenHardwareMonitorLibThreadFunc(LPVOID lpParam)
@@ -825,13 +850,13 @@ BOOL CTrafficMonitorApp::InitInstance()
 #ifndef _DEBUG		//DEBUG下不在启动时检查更新
 	if (m_general_data.check_update_when_start)
 	{
-		m_pUpdateThread = AfxBeginThread(CheckUpdateThreadFunc, NULL);
+        CheckUpdateInThread(false);
 	}
 #endif // !_DEBUG
 
 #ifndef WITHOUT_TEMPERATURE
     //启动初始化OpenHardwareMonitor的线程。由于OpenHardwareMonitor初始化需要一定的时间，为了防止启动时程序卡顿，将其放到后台线程中处理
-    m_pMonitorInitThread = AfxBeginThread(InitOpenHardwareMonitorLibThreadFunc, NULL);
+    AfxBeginThread(InitOpenHardwareMonitorLibThreadFunc, NULL);
 #endif
 
     //执行测试代码

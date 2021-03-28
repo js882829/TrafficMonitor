@@ -38,6 +38,7 @@ BEGIN_MESSAGE_MAP(CTaskBarDlg, CDialogEx)
 	ON_WM_LBUTTONDBLCLK()
 	ON_WM_TIMER()
 	ON_WM_PAINT()
+    ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
 
@@ -197,7 +198,7 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
     rect_value.left = rect_label.right;
 
     // 绘制状态条
-    if (type == TDI_CPU || type == TDI_MEMORY || type == TDI_CPU_TEMP || type == TDI_GPU_TEMP || type == TDI_HDD_TEMP || type == TDI_MAIN_BOARD_TEMP)
+    if (type == TDI_CPU || type == TDI_MEMORY || type == TDI_GPU_USAGE || type == TDI_CPU_TEMP || type == TDI_GPU_TEMP || type == TDI_HDD_TEMP || type == TDI_MAIN_BOARD_TEMP)
     {
         if (theApp.m_taskbar_data.cm_graph_type)
         {
@@ -208,6 +209,9 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
                 break;
             case TDI_MEMORY:
                 AddHisToList(type, theApp.m_memory_usage);
+                break;
+            case TDI_GPU_USAGE:
+                AddHisToList(type, theApp.m_gpu_usage);
                 break;
             case TDI_CPU_TEMP:
                 AddHisToList(type, theApp.m_cpu_temperature);
@@ -236,6 +240,9 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
                 break;
             case TDI_MEMORY:
                 value = theApp.m_memory_usage;
+                break;
+            case TDI_GPU_USAGE:
+                value = theApp.m_gpu_usage;
                 break;
             case TDI_CPU_TEMP:
                 value = theApp.m_cpu_temperature;
@@ -293,9 +300,23 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
     }
 
     //绘制CPU或内存利用率
-    else if (type == TDI_CPU || type == TDI_MEMORY)
+    else if (type == TDI_CPU || type == TDI_MEMORY || type == TDI_GPU_USAGE)
     {
-        int usage = (type == TDI_CPU ? theApp.m_cpu_usage : theApp.m_memory_usage);
+        int usage{};
+        switch (type)
+        {
+        case TDI_CPU:
+            usage = theApp.m_cpu_usage;
+            break;
+        case TDI_MEMORY:
+            usage = theApp.m_memory_usage;
+            break;
+        case TDI_GPU_USAGE:
+            usage = theApp.m_gpu_usage;
+            break;
+        default:
+            break;
+        }
         CString format_str;
         if (theApp.m_taskbar_data.hide_percent)
             format_str = _T("%d");
@@ -518,26 +539,28 @@ CString CTaskBarDlg::GetMouseTipsInfo()
 			CCommon::KBytesToString(theApp.m_total_memory));
 		tip_info += temp;
 	}
+#ifndef WITHOUT_TEMPERATURE
     if (!IsShowCpuTemperature())
     {
-        temp.Format(_T("\r\n%s: %.1f ℃"), CCommon::LoadText(IDS_CPU_TEMPERATURE), theApp.m_cpu_temperature);
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_CPU_TEMPERATURE), CCommon::TemperatureToString(theApp.m_cpu_temperature, theApp.m_taskbar_data));
         tip_info += temp;
     }
     if (!IsShowGpuTemperature())
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_GPU_TEMPERATURE), static_cast<int>(theApp.m_gpu_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_GPU_TEMPERATURE), CCommon::TemperatureToString(theApp.m_gpu_temperature, theApp.m_taskbar_data));
         tip_info += temp;
     }
     if (!IsShowHddTemperature())
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_HDD_TEMPERATURE), static_cast<int>(theApp.m_hdd_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_HDD_TEMPERATURE), CCommon::TemperatureToString(theApp.m_hdd_temperature, theApp.m_taskbar_data));
         tip_info += temp;
     }
     if (!IsShowMainboardTemperature())
     {
-        temp.Format(_T("\r\n%s: %d ℃"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), static_cast<int>(theApp.m_main_board_temperature));
+        temp.Format(_T("\r\n%s: %s"), CCommon::LoadText(IDS_MAINBOARD_TEMPERATURE), CCommon::TemperatureToString(theApp.m_main_board_temperature, theApp.m_taskbar_data));
         tip_info += temp;
     }
+#endif
     return tip_info;
 }
 
@@ -621,6 +644,7 @@ void CTaskBarDlg::CalculateWindowSize()
     value_width = m_pDC->GetTextExtent(str).cx;
     m_item_widths[TDI_CPU].value_width = value_width;
     m_item_widths[TDI_MEMORY].value_width = value_width;
+    m_item_widths[TDI_GPU_USAGE].value_width = value_width;
 
     //计算温度显示的宽度
     if (theApp.m_taskbar_data.separate_value_unit_with_space)
@@ -749,6 +773,11 @@ bool CTaskBarDlg::IsShowCpu()
 bool CTaskBarDlg::IsShowMemory()
 {
 	return (theApp.m_cfg_data.m_tbar_display_item & TDI_MEMORY);
+}
+
+bool CTaskBarDlg::IsShowGpu()
+{
+    return (theApp.m_cfg_data.m_tbar_display_item & TDI_GPU_USAGE);
 }
 
 bool CTaskBarDlg::IsShowCpuTemperature()
@@ -920,6 +949,7 @@ void CTaskBarDlg::OnInitMenu(CMenu* pMenu)
     pMenu->CheckMenuItem(ID_SHOW_DOWN_SPEED, MF_BYCOMMAND | ((IsShowDown()) ? MF_CHECKED : MF_UNCHECKED));
     pMenu->CheckMenuItem(ID_SHOW_CPU_USAGE, MF_BYCOMMAND | ((IsShowCpu()) ? MF_CHECKED : MF_UNCHECKED));
     pMenu->CheckMenuItem(ID_SHOW_MEMORY_USAGE, MF_BYCOMMAND | ((IsShowMemory()) ? MF_CHECKED : MF_UNCHECKED));
+    pMenu->CheckMenuItem(ID_SHOW_GPU, MF_BYCOMMAND | ((IsShowGpu()) ? MF_CHECKED : MF_UNCHECKED));
     pMenu->CheckMenuItem(ID_SHOW_CPU_TEMPERATURE, MF_BYCOMMAND | ((IsShowCpuTemperature()) ? MF_CHECKED : MF_UNCHECKED));
     pMenu->CheckMenuItem(ID_SHOW_GPU_TEMPERATURE, MF_BYCOMMAND | ((IsShowGpuTemperature()) ? MF_CHECKED : MF_UNCHECKED));
     pMenu->CheckMenuItem(ID_SHOW_HDD_TEMPERATURE, MF_BYCOMMAND | ((IsShowHddTemperature()) ? MF_CHECKED : MF_UNCHECKED));
@@ -1097,4 +1127,13 @@ void CTaskBarDlg::TryDrawGraph(CDrawCommon& drawer, const CRect &value_rect, Dis
 			drawer.DrawLine(start_point, height, theApp.m_taskbar_data.status_bar_color);
 		}
 	}
+}
+
+
+void CTaskBarDlg::OnClose()
+{
+    // TODO: 在此添加消息处理程序代码和/或调用默认值
+    ::SendMessage(theApp.m_pMainWnd->GetSafeHwnd(), WM_TASKBAR_WND_CLOSED, 0, 0);
+
+    CDialogEx::OnClose();
 }

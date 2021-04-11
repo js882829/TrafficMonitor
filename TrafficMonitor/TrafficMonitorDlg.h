@@ -22,6 +22,7 @@
 #include "AboutDlg.h"
 #include "CPUUsage.h"
 #include "HistoryTrafficFile.h"
+#include "HighResolutionTimer.h"
 
 // CTrafficMonitorDlg 对话框
 class CTrafficMonitorDlg : public CDialog
@@ -47,8 +48,7 @@ protected:
 	CTaskBarDlg* m_tBarDlg;		//任务栏窗口的指针
 
 	vector<NetWorkConection> m_connections;	//保存获取到的要显示到“选择网卡”菜单项中的所有网络连接
-	MIB_IFTABLE* m_pIfTable;
-	DWORD m_dwSize{};	//m_pIfTable的大小
+    MIB_IF_TABLE2* m_pIfTable;
 	int m_connection_selected{ 0 };	//要显示流量的连接的序号
 	unsigned __int64 m_in_bytes;		//当前已接收的字节数
 	unsigned __int64 m_out_bytes;	//当前已发送的字节数
@@ -86,6 +86,9 @@ protected:
 	bool m_menu_popuped{ false };				//指示当前是否有菜单处于弹出状态
 
     HDC m_desktop_dc;
+
+    CHighResolutionTimer m_timer;			// 采用多媒体定时器(也防止了界面阻塞出现的卡顿现象)
+    static void TimerCallbackTemp(DWORD_PTR dwUser);
 
 	CString GetMouseTipsInfo();		//获取鼠标提示信息
 	void SetTransparency();			//根据m_transparency的值设置窗口透明度
@@ -209,4 +212,6 @@ protected:
     afx_msg LRESULT OnTaskbarWndClosed(WPARAM wParam, LPARAM lParam);
 public:
     afx_msg void OnShowGpuUsage();
+protected:
+    afx_msg LRESULT OnMonitorInfoUpdated(WPARAM wParam, LPARAM lParam);
 };

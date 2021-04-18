@@ -151,7 +151,7 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
     else if (!theApp.m_taskbar_data.text_colors.empty())
     {
         label_color = theApp.m_taskbar_data.text_colors.begin()->second.label;
-        text_color = theApp.m_taskbar_data.text_colors.begin()->second.value;
+        text_color = theApp.m_taskbar_data.text_colors.begin()->second.label;
     }
 
     //设置标签和数值的矩形区域
@@ -266,9 +266,9 @@ void CTaskBarDlg::DrawDisplayItem(CDrawCommon& drawer, DisplayItem type, CRect r
     if (type == TDI_MEMORY && (theApp.m_taskbar_data.memory_display == MemoryDisplay::MEMORY_USED || theApp.m_taskbar_data.memory_display == MemoryDisplay::MEMORY_AVAILABLE))
     {
         if (theApp.m_taskbar_data.memory_display == MemoryDisplay::MEMORY_USED)
-            str_value = CCommon::DataSizeToString(static_cast<unsigned long long>(theApp.m_used_memory) * 1024);
+            str_value = CCommon::DataSizeToString(static_cast<unsigned long long>(theApp.m_used_memory) * 1024, theApp.m_taskbar_data.separate_value_unit_with_space);
         else
-            str_value = CCommon::DataSizeToString((static_cast<unsigned long long>(theApp.m_total_memory) - static_cast<unsigned long long>(theApp.m_used_memory)) * 1024);
+            str_value = CCommon::DataSizeToString((static_cast<unsigned long long>(theApp.m_total_memory) - static_cast<unsigned long long>(theApp.m_used_memory)) * 1024, theApp.m_taskbar_data.separate_value_unit_with_space);
     }
     //绘制CPU或内存利用率
     else if (type == TDI_CPU || type == TDI_MEMORY || type == TDI_GPU_USAGE)
@@ -616,9 +616,9 @@ void CTaskBarDlg::CalculateWindowSize()
     if (theApp.m_taskbar_data.memory_display == MemoryDisplay::MEMORY_USED || theApp.m_taskbar_data.memory_display == MemoryDisplay::MEMORY_AVAILABLE)
     {
         if (theApp.m_taskbar_data.separate_value_unit_with_space)
-            str = _T("999 MB");
+            str = _T("19.99 GB");
         else
-            str = _T("999MB");
+            str = _T("19.99GB");
         memory_width = m_pDC->GetTextExtent(str).cx;
     }
     m_item_widths[TDI_CPU].value_width = value_width;
@@ -907,8 +907,8 @@ void CTaskBarDlg::OnRButtonUp(UINT nFlags, CPoint point)
 {
     // TODO: 在此添加消息处理程序代码和/或调用默认值
 
-    CPoint point1;  //定义一个用于确定光标位置的位置  
-    GetCursorPos(&point1);  //获取当前光标的位置，以便使得菜单可以跟随光标  
+    CPoint point1;  //定义一个用于确定光标位置的位置
+    GetCursorPos(&point1);  //获取当前光标的位置，以便使得菜单可以跟随光标
     theApp.m_taskbar_menu.GetSubMenu(0)->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point1.x, point1.y, this); //在指定位置显示弹出菜单
     CDialogEx::OnRButtonUp(nFlags, point1);
 }
